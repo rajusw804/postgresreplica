@@ -1,0 +1,450 @@
+-- Create the public schema if it doesn't already exist
+CREATE SCHEMA IF NOT EXISTS public;
+
+-- 1. Table: casino_transactions
+-- Create the table if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'casino_transactions'
+    ) THEN
+        CREATE TABLE public.casino_transactions (
+            casino_transaction_id BIGINT PRIMARY KEY,
+            tenant_id INTEGER,
+            user_id INTEGER,
+            action_type VARCHAR(255),
+            action_id VARCHAR(255),
+            amount DOUBLE PRECISION,
+            game_identifier VARCHAR(255),
+            game_id VARCHAR(255),
+            wallet_id INTEGER,
+            non_cash_amount DOUBLE PRECISION,
+            status INTEGER,
+            admin_id INTEGER,
+            currency_code VARCHAR(255),
+            before_balance DOUBLE PRECISION,
+            after_balance DOUBLE PRECISION,
+            primary_currency_amount DOUBLE PRECISION,
+            amount_type INTEGER,
+            elastic_updated BOOLEAN,
+            conversion_rate DOUBLE PRECISION,
+            is_sticky BOOLEAN,
+            user_bonus_id INTEGER,
+            created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+            updated_at TIMESTAMP WITHOUT TIME ZONE,
+            more_details JSONB,
+            jackpot_contribution DOUBLE PRECISION
+        );
+    END IF;
+END $$;
+
+-- Data insertion and update for casino_transactions
+WITH AdminTenants AS (
+    SELECT tenant_id 
+    FROM multi_tenant_system.tenants 
+    WHERE admin_user_id = 617
+),
+TenantLicenses AS (
+    SELECT id 
+    FROM multi_tenant_system.tenant_multi_licenses 
+    WHERE tenant_id IN (SELECT tenant_id FROM AdminTenants) 
+    AND name = 'Tobique'
+),
+AdminTenantUsers AS (
+    SELECT user_id
+    FROM multi_tenant_system.users
+    WHERE multi_tenant_system.users.tenant_id IN (SELECT tenant_id FROM AdminTenants) 
+    AND multi_tenant_system.users.license_id IN (SELECT id FROM TenantLicenses)
+),
+BatchData AS (
+    SELECT ct.*
+    FROM casino_system.casino_transactions ct
+    INNER JOIN AdminTenantUsers atu ON ct.user_id = atu.user_id
+    ORDER BY ct.casino_transaction_id
+)
+INSERT INTO public.casino_transactions (
+    casino_transaction_id, tenant_id, user_id, action_type, action_id, amount, 
+    game_identifier, game_id, wallet_id, non_cash_amount, status, admin_id, 
+    currency_code, before_balance, after_balance, primary_currency_amount, 
+    amount_type, elastic_updated, conversion_rate, is_sticky, user_bonus_id, 
+    created_at, updated_at, more_details, jackpot_contribution
+)
+SELECT 
+    casino_transaction_id, tenant_id, user_id, action_type, action_id, amount, 
+    game_identifier, game_id, wallet_id, non_cash_amount, status, admin_id, 
+    currency_code, before_balance, after_balance, primary_currency_amount, 
+    amount_type, elastic_updated, conversion_rate, is_sticky, user_bonus_id, 
+    created_at, updated_at, more_details, jackpot_contribution
+FROM BatchData
+ON CONFLICT (casino_transaction_id)
+DO UPDATE SET 
+    tenant_id = EXCLUDED.tenant_id,
+    user_id = EXCLUDED.user_id,
+    action_type = EXCLUDED.action_type,
+    action_id = EXCLUDED.action_id,
+    amount = EXCLUDED.amount,
+    game_identifier = EXCLUDED.game_identifier,
+    game_id = EXCLUDED.game_id,
+    wallet_id = EXCLUDED.wallet_id,
+    non_cash_amount = EXCLUDED.non_cash_amount,
+    status = EXCLUDED.status,
+    admin_id = EXCLUDED.admin_id,
+    currency_code = EXCLUDED.currency_code,
+    before_balance = EXCLUDED.before_balance,
+    after_balance = EXCLUDED.after_balance,
+    primary_currency_amount = EXCLUDED.primary_currency_amount,
+    amount_type = EXCLUDED.amount_type,
+    elastic_updated = EXCLUDED.elastic_updated,
+    conversion_rate = EXCLUDED.conversion_rate,
+    is_sticky = EXCLUDED.is_sticky,
+    user_bonus_id = EXCLUDED.user_bonus_id,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at,
+    more_details = EXCLUDED.more_details,
+    jackpot_contribution = EXCLUDED.jackpot_contribution;
+
+-- 2. Table: category_games
+-- Create the table if it doesn't exist
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'category_games'
+    ) THEN
+        CREATE TABLE public.category_games (
+            category_game_id INTEGER PRIMARY KEY,
+            tenant_game_sub_category_id INTEGER NOT NULL,
+            master_casino_provider_id INTEGER NOT NULL,
+            master_casino_game_id INTEGER NOT NULL,
+            return_to_player DOUBLE PRECISION,
+            wagering_contribution DOUBLE PRECISION NOT NULL,
+            is_active BOOLEAN DEFAULT TRUE NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            thumbnail_url VARCHAR(255),
+            description TEXT,
+            tenant_id INTEGER NOT NULL,
+            order_id INTEGER,
+            created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL
+        );
+    END IF;
+END $$;
+
+-- Data insertion and update for category_games
+WITH AdminTenants AS (
+    SELECT tenant_id 
+    FROM multi_tenant_system.tenants 
+    WHERE admin_user_id = 617
+),
+BatchData AS (
+    SELECT cg.*
+    FROM casino_system.category_games cg
+    INNER JOIN AdminTenants ON cg.tenant_id = AdminTenants.tenant_id
+    ORDER BY cg.category_game_id
+)
+INSERT INTO public.category_games (
+    category_game_id, tenant_game_sub_category_id, master_casino_provider_id,
+    master_casino_game_id, return_to_player, wagering_contribution, is_active,
+    name, thumbnail_url, description, tenant_id, order_id, created_at, updated_at
+)
+SELECT 
+    category_game_id, tenant_game_sub_category_id, master_casino_provider_id,
+    master_casino_game_id, return_to_player, wagering_contribution, is_active,
+    name, thumbnail_url, description, tenant_id, order_id, created_at, updated_at
+FROM BatchData
+ON CONFLICT (category_game_id)
+DO UPDATE SET 
+    tenant_game_sub_category_id = EXCLUDED.tenant_game_sub_category_id,
+    master_casino_provider_id = EXCLUDED.master_casino_provider_id,
+    master_casino_game_id = EXCLUDED.master_casino_game_id,
+    return_to_player = EXCLUDED.return_to_player,
+    wagering_contribution = EXCLUDED.wagering_contribution,
+    is_active = EXCLUDED.is_active,
+    name = EXCLUDED.name,
+    thumbnail_url = EXCLUDED.thumbnail_url,
+    description = EXCLUDED.description,
+    tenant_id = EXCLUDED.tenant_id,
+    order_id = EXCLUDED.order_id,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
+
+-- 3. Table: daily_cumulative_report
+-- Create the table if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'daily_cumulative_report'
+    ) THEN
+        CREATE TABLE public.daily_cumulative_report (
+            daily_cumulative_report_id INTEGER PRIMARY KEY,
+            tenant_id INTEGER NOT NULL,
+            casino_provider_id INTEGER NOT NULL,
+            amount NUMERIC DEFAULT 0 NOT NULL,
+            report_date DATE NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL
+        );
+    END IF;
+END $$;
+
+-- Data insertion and update for daily_cumulative_report
+INSERT INTO public.daily_cumulative_report (
+    daily_cumulative_report_id, tenant_id, casino_provider_id, amount, 
+    report_date, created_at, updated_at
+)
+SELECT 
+    dcr.daily_cumulative_report_id, dcr.tenant_id, dcr.casino_provider_id, 
+    dcr.amount, dcr.report_date, dcr.created_at, dcr.updated_at
+FROM casino_system.daily_cumulative_report dcr
+INNER JOIN (
+    WITH AdminTenants AS (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    )
+    SELECT tenant_id
+    FROM AdminTenants
+) AS AdminTenants
+ON dcr.tenant_id = AdminTenants.tenant_id
+ON CONFLICT (daily_cumulative_report_id)
+DO UPDATE SET 
+    tenant_id = EXCLUDED.tenant_id,
+    casino_provider_id = EXCLUDED.casino_provider_id,
+    amount = EXCLUDED.amount,
+    report_date = EXCLUDED.report_date,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
+
+-- 4. Table: favorite_games
+-- Create the table if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'favorite_games'
+    ) THEN
+        CREATE TABLE public.favorite_games (
+            favorite_game_id INTEGER PRIMARY KEY,
+            category_game_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL
+        );
+    END IF;
+END $$;
+
+-- Data insertion and update for favorite_games
+INSERT INTO public.favorite_games (
+    favorite_game_id, category_game_id, user_id, created_at, updated_at
+)
+SELECT 
+    fg.favorite_game_id, fg.category_game_id, fg.user_id, fg.created_at, fg.updated_at
+FROM casino_system.favorite_games fg
+INNER JOIN (
+    WITH AdminTenants AS (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    ),
+    TenantLicenses AS (
+        SELECT id 
+        FROM multi_tenant_system.tenant_multi_licenses 
+        WHERE tenant_id IN (SELECT tenant_id FROM AdminTenants) 
+        AND name = 'Tobique'
+    ),
+    AdminTenantUsers AS (
+        SELECT user_id
+        FROM multi_tenant_system.users
+        WHERE tenant_id IN (SELECT tenant_id FROM AdminTenants) 
+        AND license_id IN (SELECT id FROM TenantLicenses)
+    )
+    SELECT user_id
+    FROM AdminTenantUsers
+) AS AdminTenantUsers
+ON fg.user_id = AdminTenantUsers.user_id
+ON CONFLICT (favorite_game_id)
+DO UPDATE SET 
+    category_game_id = EXCLUDED.category_game_id,
+    user_id = EXCLUDED.user_id,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
+
+-- 5. Table: tenant_casino_providers
+-- Create the new table if it doesn't exist
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'tenant_casino_providers'
+    ) THEN
+        CREATE TABLE public.tenant_casino_providers (
+            tenant_casino_provider_id INTEGER PRIMARY KEY,
+            master_casino_provider_id INTEGER NOT NULL,
+            master_game_aggregator_id INTEGER NOT NULL,
+            is_active BOOLEAN NOT NULL,
+            thumbnail_url VARCHAR(255),
+            tenant_id INTEGER NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL,
+            demo BOOLEAN DEFAULT TRUE,
+            order_id INTEGER
+        );
+    END IF;
+END $$;
+
+-- Data insertion and update for tenant_casino_providers
+INSERT INTO public.tenant_casino_providers (
+    tenant_casino_provider_id, master_casino_provider_id, master_game_aggregator_id, 
+    is_active, thumbnail_url, tenant_id, created_at, updated_at, demo, order_id
+)
+SELECT 
+    tcp.tenant_casino_provider_id, tcp.master_casino_provider_id, tcp.master_game_aggregator_id, 
+    tcp.is_active, tcp.thumbnail_url, tcp.tenant_id, tcp.created_at, tcp.updated_at, tcp.demo, tcp.order_id
+FROM casino_system.tenant_casino_providers tcp
+INNER JOIN (
+    WITH AdminTenants AS (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    )
+    SELECT tenant_id
+    FROM AdminTenants
+) AS AdminTenants
+ON tcp.tenant_id = AdminTenants.tenant_id
+ON CONFLICT (tenant_casino_provider_id)
+DO UPDATE SET 
+    master_casino_provider_id = EXCLUDED.master_casino_provider_id,
+    master_game_aggregator_id = EXCLUDED.master_game_aggregator_id,
+    is_active = EXCLUDED.is_active,
+    thumbnail_url = EXCLUDED.thumbnail_url,
+    tenant_id = EXCLUDED.tenant_id,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at,
+    demo = EXCLUDED.demo,
+    order_id = EXCLUDED.order_id;
+
+-- 6. Table: tenant_game_categories
+-- Create the table only if it doesn't exist
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'tenant_game_categories'
+    ) THEN
+        CREATE TABLE public.tenant_game_categories (
+            tenant_game_category_id INTEGER PRIMARY KEY,
+            name JSONB NOT NULL,
+            tenant_id INTEGER NOT NULL,
+            master_game_category_id INTEGER,
+            is_active BOOLEAN DEFAULT TRUE,
+            order_id INTEGER NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL
+        );
+    END IF;
+END $$;
+
+-- Data insertion and update for tenant_game_categories
+INSERT INTO public.tenant_game_categories (
+    tenant_game_category_id, name, tenant_id, master_game_category_id, 
+    is_active, order_id, created_at, updated_at
+)
+SELECT 
+    tgc.tenant_game_category_id, tgc.name, tgc.tenant_id, tgc.master_game_category_id, 
+    tgc.is_active, tgc.order_id, tgc.created_at, tgc.updated_at
+FROM casino_system.tenant_game_categories tgc
+INNER JOIN (
+    WITH AdminTenants AS (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    )
+    SELECT tenant_id
+    FROM AdminTenants
+) AS AdminTenants
+ON tgc.tenant_id = AdminTenants.tenant_id
+ON CONFLICT (tenant_game_category_id)
+DO UPDATE SET 
+    name = EXCLUDED.name,
+    tenant_id = EXCLUDED.tenant_id,
+    master_game_category_id = EXCLUDED.master_game_category_id,
+    is_active = EXCLUDED.is_active,
+    order_id = EXCLUDED.order_id,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
+
+-- 7. Table: tenant_game_sub_categories
+-- Create the table if it doesn't exist
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'tenant_game_sub_categories'
+    ) THEN
+        CREATE TABLE public.tenant_game_sub_categories (
+            tenant_game_sub_category_id INTEGER PRIMARY KEY,
+            name JSONB NOT NULL,
+            tenant_game_category_id INTEGER NOT NULL,
+            master_game_sub_category_id INTEGER,
+            image_url VARCHAR(255),
+            order_id INTEGER NOT NULL,
+            is_active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL,
+            is_labeled_category BOOLEAN DEFAULT FALSE,
+            label_icon_url VARCHAR(255)
+        );
+    END IF;
+END $$;
+
+-- Data insertion and update for tenant_game_sub_categories
+INSERT INTO public.tenant_game_sub_categories (
+    tenant_game_sub_category_id, name, tenant_game_category_id, 
+    master_game_sub_category_id, image_url, order_id, is_active, 
+    created_at, updated_at, is_labeled_category, label_icon_url
+)
+SELECT 
+    tgsc.tenant_game_sub_category_id, tgsc.name, tgsc.tenant_game_category_id, 
+    tgsc.master_game_sub_category_id, tgsc.image_url, tgsc.order_id, tgsc.is_active, 
+    tgsc.created_at, tgsc.updated_at, tgsc.is_labeled_category, tgsc.label_icon_url
+FROM casino_system.tenant_game_sub_categories tgsc
+INNER JOIN casino_system.tenant_game_categories tgc 
+    ON tgc.tenant_game_category_id = tgsc.tenant_game_category_id
+INNER JOIN (
+    WITH AdminTenants AS (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    )
+    SELECT tenant_id
+    FROM AdminTenants
+) AS AdminTenants
+ON tgc.tenant_id = AdminTenants.tenant_id
+ON CONFLICT (tenant_game_sub_category_id)
+DO UPDATE SET 
+    name = EXCLUDED.name,
+    tenant_game_category_id = EXCLUDED.tenant_game_category_id,
+    master_game_sub_category_id = EXCLUDED.master_game_sub_category_id,
+    image_url = EXCLUDED.image_url,
+    order_id = EXCLUDED.order_id,
+    is_active = EXCLUDED.is_active,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at,
+    is_labeled_category = EXCLUDED.is_labeled_category,
+    label_icon_url = EXCLUDED.label_icon_url;

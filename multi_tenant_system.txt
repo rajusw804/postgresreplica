@@ -1,0 +1,2540 @@
+-- Schema: multi_tenant_system 
+
+-- 1.  Table : users, wallets, limits
+--        Query:
+        	-- Dynamically create the table and insert data
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'user_wallets_limits'
+    ) THEN
+        CREATE TABLE public.user_wallets_limits (
+            user_id integer NOT NULL,
+            wallet_id integer,
+            amount double precision,
+            daily_bet_limit double precision,
+            daily_bet_expiry timestamp with time zone,
+            daily_bet_updated_at timestamp with time zone,
+            weekly_bet_limit double precision,
+            monthly_bet_limit double precision,
+            first_name character varying(255) NOT NULL,
+            last_name character varying(255) NOT NULL,
+            email character varying(255) NOT NULL,
+            is_email_verified boolean DEFAULT false,
+            phone character varying(255),
+            date_of_birth timestamp with time zone NOT NULL,
+            gender character varying(255),
+            locale character varying(255),
+            sign_in_count integer DEFAULT 0 NOT NULL,
+            sign_in_ip inet,
+            parent_id integer,
+            username character varying(255),
+            country_code character varying(255) NOT NULL,
+            tenant_id integer NOT NULL,
+            is_active boolean DEFAULT true NOT NULL,
+            last_login_date timestamp with time zone,
+            self_exclusion timestamp with time zone,
+            self_exclusion_updated_at timestamp with time zone,
+            disabled_at timestamp with time zone,
+            disabled_by_type character varying(255),
+            disabled_by_id integer,
+            disable_reason character varying(255),
+            default_disable_reason character varying(255),
+            unique_id uuid,
+            phone_code character varying(255),
+            new_password_key character varying(255),
+            new_password_requested timestamp with time zone,
+            email_token character varying(255),
+            city character varying(255),
+            zip_code character varying(255),
+            affiliate_id integer,
+            profile_image character varying(255),
+            currency_code character varying(255) NOT NULL,
+            kyc_status character varying(255),
+            document_labels jsonb,
+            requested_documents jsonb,
+            logged_in integer DEFAULT 0 NOT NULL,
+            device_type character varying(255),
+            address character varying(255) NOT NULL,
+            level integer DEFAULT 1 NOT NULL,
+            loyalty_points double precision DEFAULT '0'::double precision NOT NULL,
+            tags jsonb,
+            is_internal_user boolean DEFAULT false NOT NULL,
+            affiliate_status boolean DEFAULT false NOT NULL,
+            tracking_token character varying(255),
+            is_affiliate_updated boolean,
+            applicant_id character varying(255),
+            kyc_method integer,
+            sumsub_kyc_status character varying(255),
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL,
+            deleted_at timestamp with time zone,
+            banner_text jsonb,
+            other jsonb,
+            is_phone_verified boolean DEFAULT false,
+            license_id integer,
+            is_streamer_user boolean DEFAULT false NOT NULL,
+            PRIMARY KEY (user_id)
+        );
+    END IF;
+END $$;
+
+-- Insert or update the data into the table
+INSERT INTO public.user_wallets_limits (
+    user_id, wallet_id, amount, daily_bet_limit,
+    daily_bet_expiry, daily_bet_updated_at, weekly_bet_limit, monthly_bet_limit,
+    first_name, last_name, email, is_email_verified, phone, date_of_birth,
+    gender, locale, sign_in_count, sign_in_ip, parent_id, username, country_code,
+    tenant_id, is_active, last_login_date, self_exclusion, self_exclusion_updated_at,
+    disabled_at, disabled_by_type, disabled_by_id, disable_reason, default_disable_reason,
+    unique_id, phone_code, new_password_key, new_password_requested, email_token,
+    city, zip_code, affiliate_id, profile_image, currency_code, kyc_status, document_labels,
+    requested_documents, logged_in, device_type, address, level, loyalty_points, tags,
+    is_internal_user, affiliate_status, tracking_token, is_affiliate_updated, applicant_id,
+    kyc_method, sumsub_kyc_status, created_at, updated_at, deleted_at, banner_text, other,
+    is_phone_verified, license_id, is_streamer_user
+)
+SELECT 
+    u.user_id, w.wallet_id, w.amount, l.daily_bet_limit,
+    l.daily_bet_expiry, l.daily_bet_updated_at, l.weekly_bet_limit, l.monthly_bet_limit,
+    u.first_name, u.last_name, u.email, u.is_email_verified, u.phone, u.date_of_birth,
+    u.gender, u.locale, u.sign_in_count, u.sign_in_ip, u.parent_id, u.username, u.country_code,
+    u.tenant_id, u.is_active, u.last_login_date, u.self_exclusion, u.self_exclusion_updated_at,
+    u.disabled_at, u.disabled_by_type, u.disabled_by_id, u.disable_reason, u.default_disable_reason,
+    u.unique_id, u.phone_code, u.new_password_key, u.new_password_requested, u.email_token,
+    u.city, u.zip_code, u.affiliate_id, u.profile_image, u.currency_code, u.kyc_status, u.document_labels,
+    u.requested_documents, u.logged_in, u.device_type, u.address, u.level, u.loyalty_points, u.tags,
+    u.is_internal_user, u.affiliate_status, u.tracking_token, u.is_affiliate_updated, u.applicant_id,
+    u.kyc_method, u.sumsub_kyc_status, u.created_at, u.updated_at, u.deleted_at, u.banner_text, u.other,
+    u.is_phone_verified, u.license_id, u.is_streamer_user
+FROM multi_tenant_system.users u
+INNER JOIN multi_tenant_system.wallets w ON w.owner_id = u.user_id
+INNER JOIN multi_tenant_system.limits l ON l.user_id = u.user_id
+INNER JOIN (
+    WITH AdminTenants AS (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    ),
+    TenantLicenses AS (
+        SELECT id 
+        FROM multi_tenant_system.tenant_multi_licenses 
+        WHERE tenant_id IN (SELECT tenant_id FROM AdminTenants) 
+        AND name = 'Tobique'
+    )
+    SELECT tenant_id, id AS license_id
+    FROM AdminTenants, TenantLicenses
+) AS AdminTenantLicenses
+ON u.tenant_id = AdminTenantLicenses.tenant_id 
+AND u.license_id = AdminTenantLicenses.license_id
+ON CONFLICT (user_id)
+DO UPDATE SET 
+    wallet_id = EXCLUDED.wallet_id,
+    amount = EXCLUDED.amount,
+    daily_bet_limit = EXCLUDED.daily_bet_limit,
+    daily_bet_expiry = EXCLUDED.daily_bet_expiry,
+    daily_bet_updated_at = EXCLUDED.daily_bet_updated_at,
+    weekly_bet_limit = EXCLUDED.weekly_bet_limit,
+    monthly_bet_limit = EXCLUDED.monthly_bet_limit,
+    first_name = EXCLUDED.first_name,
+    last_name = EXCLUDED.last_name,
+    email = EXCLUDED.email,
+    is_email_verified = EXCLUDED.is_email_verified,
+    phone = EXCLUDED.phone,
+    date_of_birth = EXCLUDED.date_of_birth,
+    gender = EXCLUDED.gender,
+    locale = EXCLUDED.locale,
+    sign_in_count = EXCLUDED.sign_in_count,
+    sign_in_ip = EXCLUDED.sign_in_ip,
+    parent_id = EXCLUDED.parent_id,
+    username = EXCLUDED.username,
+    country_code = EXCLUDED.country_code,
+    tenant_id = EXCLUDED.tenant_id,
+    is_active = EXCLUDED.is_active,
+    last_login_date = EXCLUDED.last_login_date,
+    self_exclusion = EXCLUDED.self_exclusion,
+    self_exclusion_updated_at = EXCLUDED.self_exclusion_updated_at,
+    disabled_at = EXCLUDED.disabled_at,
+    disabled_by_type = EXCLUDED.disabled_by_type,
+    disabled_by_id = EXCLUDED.disabled_by_id,
+    disable_reason = EXCLUDED.disable_reason,
+    default_disable_reason = EXCLUDED.default_disable_reason,
+    unique_id = EXCLUDED.unique_id,
+    phone_code = EXCLUDED.phone_code,
+    new_password_key = EXCLUDED.new_password_key,
+    new_password_requested = EXCLUDED.new_password_requested,
+    email_token = EXCLUDED.email_token,
+    city = EXCLUDED.city,
+    zip_code = EXCLUDED.zip_code,
+    affiliate_id = EXCLUDED.affiliate_id,
+    profile_image = EXCLUDED.profile_image,
+    currency_code = EXCLUDED.currency_code,
+    kyc_status = EXCLUDED.kyc_status,
+    document_labels = EXCLUDED.document_labels,
+    requested_documents = EXCLUDED.requested_documents,
+    logged_in = EXCLUDED.logged_in,
+    device_type = EXCLUDED.device_type,
+    address = EXCLUDED.address,
+    level = EXCLUDED.level,
+    loyalty_points = EXCLUDED.loyalty_points,
+    tags = EXCLUDED.tags,
+    is_internal_user = EXCLUDED.is_internal_user,
+    affiliate_status = EXCLUDED.affiliate_status,
+    tracking_token = EXCLUDED.tracking_token,
+    is_affiliate_updated = EXCLUDED.is_affiliate_updated,
+    applicant_id = EXCLUDED.applicant_id,
+    kyc_method = EXCLUDED.kyc_method,
+    sumsub_kyc_status = EXCLUDED.sumsub_kyc_status,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at,
+    deleted_at = EXCLUDED.deleted_at,
+    banner_text = EXCLUDED.banner_text,
+    other = EXCLUDED.other,
+    is_phone_verified = EXCLUDED.is_phone_verified,
+    license_id = EXCLUDED.license_id,
+    is_streamer_user = EXCLUDED.is_streamer_user;
+
+
+
+
+
+    
+-- 2.  Table : affiliates
+--        Query:
+            -- Create the table and insert data dynamically
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'affiliates'
+    ) THEN
+        CREATE TABLE public.affiliates (
+            affiliate_id integer PRIMARY KEY,
+            tracking_token character varying(255),
+            tenant_id integer NOT NULL,
+            user_id_affiliate integer,
+            user_hash_id character varying(255),
+            parent_id_affiliate character varying(255),
+            parent_username character varying(255),
+            admin_id_affiliate integer,
+            admin_username character varying(255),
+            username character varying(255),
+            first_name character varying(255),
+            last_name character varying(255),
+            email character varying(255),
+            balance double precision,
+            payment_type double precision,
+            minimum_payment double precision,
+            company character varying(255),
+            dob character varying(255),
+            marketing character varying(255),
+            mobile character varying(255),
+            skype character varying(255),
+            terms_agreement character varying(255),
+            website character varying(255),
+            country character varying(255),
+            currency character varying(255),
+            status character varying(255),
+            is_active boolean DEFAULT true,
+            other_details jsonb,
+            join_date timestamp with time zone,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL,
+            parent_name character varying(255)
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.affiliates (
+    affiliate_id, tracking_token, tenant_id, user_id_affiliate,
+    user_hash_id, parent_id_affiliate, parent_username,
+    admin_id_affiliate, admin_username, username, first_name,
+    last_name, email, balance, payment_type, minimum_payment,
+    company, dob, marketing, mobile, skype, terms_agreement,
+    website, country, currency, status, is_active,
+    other_details, join_date, created_at, updated_at, parent_name
+)
+SELECT 
+    a.affiliate_id, a.tracking_token, a.tenant_id, a.user_id_affiliate,
+    a.user_hash_id, a.parent_id_affiliate, a.parent_username,
+    a.admin_id_affiliate, a.admin_username, a.username, a.first_name,
+    a.last_name, a.email, a.balance, a.payment_type, a.minimum_payment,
+    a.company, a.dob, a.marketing, a.mobile, a.skype, a.terms_agreement,
+    a.website, a.country, a.currency, a.status, a.is_active,
+    a.other_details, a.join_date, a.created_at, a.updated_at, a.parent_name
+FROM multi_tenant_system.affiliates a
+INNER JOIN (
+    WITH AdminTenants AS (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    )
+    SELECT tenant_id
+    FROM AdminTenants
+) AS AdminTenants
+ON a.tenant_id = AdminTenants.tenant_id
+ON CONFLICT (affiliate_id)
+DO UPDATE SET 
+    tracking_token = EXCLUDED.tracking_token,
+    tenant_id = EXCLUDED.tenant_id,
+    user_id_affiliate = EXCLUDED.user_id_affiliate,
+    user_hash_id = EXCLUDED.user_hash_id,
+    parent_id_affiliate = EXCLUDED.parent_id_affiliate,
+    parent_username = EXCLUDED.parent_username,
+    admin_id_affiliate = EXCLUDED.admin_id_affiliate,
+    admin_username = EXCLUDED.admin_username,
+    username = EXCLUDED.username,
+    first_name = EXCLUDED.first_name,
+    last_name = EXCLUDED.last_name,
+    email = EXCLUDED.email,
+    balance = EXCLUDED.balance,
+    payment_type = EXCLUDED.payment_type,
+    minimum_payment = EXCLUDED.minimum_payment,
+    company = EXCLUDED.company,
+    dob = EXCLUDED.dob,
+    marketing = EXCLUDED.marketing,
+    mobile = EXCLUDED.mobile,
+    skype = EXCLUDED.skype,
+    terms_agreement = EXCLUDED.terms_agreement,
+    website = EXCLUDED.website,
+    country = EXCLUDED.country,
+    currency = EXCLUDED.currency,
+    status = EXCLUDED.status,
+    is_active = EXCLUDED.is_active,
+    other_details = EXCLUDED.other_details,
+    join_date = EXCLUDED.join_date,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at,
+    parent_name = EXCLUDED.parent_name;
+
+
+
+
+-- 3.  Table : banned_players
+-- Query:
+            -- Create the table and insert data dynamically
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'banned_players'
+    ) THEN
+        CREATE TABLE public.banned_players (
+            id integer PRIMARY KEY,
+            first_name character varying(255) NOT NULL,
+            last_name character varying(255) NOT NULL,
+            email character varying(255) NOT NULL,
+            date_of_birth timestamp with time zone NOT NULL,
+            tenant_id integer,
+            admin_id integer,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.banned_players (
+    id, first_name, last_name, email, 
+    date_of_birth, tenant_id, admin_id, 
+    created_at, updated_at
+)
+SELECT 
+    bp.id, bp.first_name, bp.last_name, bp.email, 
+    bp.date_of_birth, bp.tenant_id, bp.admin_id, 
+    bp.created_at, bp.updated_at
+FROM multi_tenant_system.banned_players bp
+INNER JOIN (
+    WITH AdminTenants AS (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    )
+    SELECT tenant_id
+    FROM AdminTenants
+) AS AdminTenants
+ON bp.tenant_id = AdminTenants.tenant_id
+ON CONFLICT (id)
+DO UPDATE SET 
+    first_name = EXCLUDED.first_name,
+    last_name = EXCLUDED.last_name,
+    email = EXCLUDED.email,
+    date_of_birth = EXCLUDED.date_of_birth,
+    tenant_id = EXCLUDED.tenant_id,
+    admin_id = EXCLUDED.admin_id,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
+
+
+-- 4.  Table: bonus
+--        Query:
+            -- Create the table and insert data dynamically
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'bonus'
+    ) THEN
+        CREATE TABLE public.bonus (
+            bonus_id integer PRIMARY KEY,
+            admin_id integer NOT NULL,
+            tenant_id integer NOT NULL,
+            parent_type character varying(255) NOT NULL,
+            parent_id integer NOT NULL,
+            code uuid NOT NULL,
+            valid_from timestamp with time zone,
+            valid_to timestamp with time zone,
+            days_to_clear integer,
+            promotion_title jsonb,
+            bonus_type character varying(255) NOT NULL,
+            term_condition jsonb,
+            quantity integer,
+            currency jsonb NOT NULL,
+            payment_methods jsonb,
+            image_url character varying(255),
+            is_active boolean NOT NULL,
+            deposit_bonus_percent integer DEFAULT 0,
+            wagering_requirement_type character varying(255) DEFAULT '0',
+            wagering_multiplier integer DEFAULT 1,
+            wagering_template_id integer,
+            valid_on_days jsonb,
+            is_sticky boolean DEFAULT false,
+            visible_in_promotions boolean DEFAULT false,
+            claimed_count integer DEFAULT 0,
+            applied_bonus_id integer,
+            game_ids jsonb,
+            description jsonb NOT NULL,
+            order_id integer,
+            bonus_bet_only boolean DEFAULT true,
+            other jsonb,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL,
+            promotional_overview jsonb
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.bonus (
+    bonus_id, admin_id, tenant_id, parent_type, parent_id, code, 
+    valid_from, valid_to, days_to_clear, promotion_title, 
+    bonus_type, term_condition, quantity, currency, 
+    payment_methods, image_url, is_active, deposit_bonus_percent, 
+    wagering_requirement_type, wagering_multiplier, wagering_template_id, 
+    valid_on_days, is_sticky, visible_in_promotions, claimed_count, 
+    applied_bonus_id, game_ids, description, order_id, bonus_bet_only, 
+    other, created_at, updated_at, promotional_overview
+)
+SELECT 
+    b.bonus_id, b.admin_id, b.tenant_id, b.parent_type, b.parent_id, b.code, 
+    b.valid_from, b.valid_to, b.days_to_clear, b.promotion_title, 
+    b.bonus_type, b.term_condition, b.quantity, b.currency, 
+    b.payment_methods, b.image_url, b.is_active, b.deposit_bonus_percent, 
+    b.wagering_requirement_type, b.wagering_multiplier, b.wagering_template_id, 
+    b.valid_on_days, b.is_sticky, b.visible_in_promotions, b.claimed_count, 
+    b.applied_bonus_id, b.game_ids, b.description, b.order_id, b.bonus_bet_only, 
+    b.other, b.created_at, b.updated_at, b.promotional_overview
+FROM multi_tenant_system.bonus b
+INNER JOIN (
+    WITH AdminTenants AS (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    )
+    SELECT tenant_id
+    FROM AdminTenants
+) AS AdminTenants
+ON b.tenant_id = AdminTenants.tenant_id
+ON CONFLICT (bonus_id)
+DO UPDATE SET 
+    admin_id = EXCLUDED.admin_id,
+    tenant_id = EXCLUDED.tenant_id,
+    parent_type = EXCLUDED.parent_type,
+    parent_id = EXCLUDED.parent_id,
+    code = EXCLUDED.code,
+    valid_from = EXCLUDED.valid_from,
+    valid_to = EXCLUDED.valid_to,
+    days_to_clear = EXCLUDED.days_to_clear,
+    promotion_title = EXCLUDED.promotion_title,
+    bonus_type = EXCLUDED.bonus_type,
+    term_condition = EXCLUDED.term_condition,
+    quantity = EXCLUDED.quantity,
+    currency = EXCLUDED.currency,
+    payment_methods = EXCLUDED.payment_methods,
+    image_url = EXCLUDED.image_url,
+    is_active = EXCLUDED.is_active,
+    deposit_bonus_percent = EXCLUDED.deposit_bonus_percent,
+    wagering_requirement_type = EXCLUDED.wagering_requirement_type,
+    wagering_multiplier = EXCLUDED.wagering_multiplier,
+    wagering_template_id = EXCLUDED.wagering_template_id,
+    valid_on_days = EXCLUDED.valid_on_days,
+    is_sticky = EXCLUDED.is_sticky,
+    visible_in_promotions = EXCLUDED.visible_in_promotions,
+    claimed_count = EXCLUDED.claimed_count,
+    applied_bonus_id = EXCLUDED.applied_bonus_id,
+    game_ids = EXCLUDED.game_ids,
+    description = EXCLUDED.description,
+    order_id = EXCLUDED.order_id,
+    bonus_bet_only = EXCLUDED.bonus_bet_only,
+    other = EXCLUDED.other,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at,
+    promotional_overview = EXCLUDED.promotional_overview;
+
+--    5.  Table: cms_pages
+--        Query:
+            -- Create the table and insert data dynamically
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'cms_pages'
+    ) THEN
+        CREATE TABLE public.cms_pages (
+            cms_page_id integer PRIMARY KEY,
+            title jsonb NOT NULL,
+            slug character varying(255) NOT NULL,
+            content jsonb NOT NULL,
+            category integer DEFAULT 1 NOT NULL,
+            is_active boolean,
+            admin_user_id integer,
+            tenant_id integer,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL,
+            global boolean,
+            meta_title jsonb,
+            meta_description jsonb,
+            license_id integer
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.cms_pages (
+    cms_page_id, title, slug, content, category, 
+    is_active, admin_user_id, tenant_id, created_at, 
+    updated_at, global, meta_title, meta_description, license_id
+)
+SELECT 
+    cp.cms_page_id, cp.title, cp.slug, cp.content, cp.category, 
+    cp.is_active, cp.admin_user_id, cp.tenant_id, cp.created_at, 
+    cp.updated_at, cp.global, cp.meta_title, cp.meta_description, cp.license_id
+FROM multi_tenant_system.cms_pages cp
+INNER JOIN (
+    WITH AdminTenants AS (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    )
+    SELECT tenant_id
+    FROM AdminTenants
+) AS AdminTenants
+ON cp.tenant_id = AdminTenants.tenant_id
+ON CONFLICT (cms_page_id)
+DO UPDATE SET 
+    title = EXCLUDED.title,
+    slug = EXCLUDED.slug,
+    content = EXCLUDED.content,
+    category = EXCLUDED.category,
+    is_active = EXCLUDED.is_active,
+    admin_user_id = EXCLUDED.admin_user_id,
+    tenant_id = EXCLUDED.tenant_id,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at,
+    global = EXCLUDED.global,
+    meta_title = EXCLUDED.meta_title,
+    meta_description = EXCLUDED.meta_description,
+    license_id = EXCLUDED.license_id;
+
+--    6.  Table: comments
+--        Query:
+            -- Create the table and insert data dynamically
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'comments'
+    ) THEN
+        CREATE TABLE public.comments (
+            comment_id integer PRIMARY KEY,
+            user_id integer NOT NULL,
+            title character varying(255) NOT NULL,
+            comment text NOT NULL,
+            commented_by character varying(255) NOT NULL,
+            status boolean DEFAULT true,
+            role character varying(255) NOT NULL,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.comments (
+    comment_id, user_id, title, comment, commented_by, 
+    status, role, created_at, updated_at
+)
+SELECT 
+    c.comment_id, c.user_id, c.title, c.comment, c.commented_by, 
+    c.status, c.role, c.created_at, c.updated_at
+FROM multi_tenant_system.comments c
+INNER JOIN (
+    WITH AdminTenants AS (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    ),
+    TenantLicenses AS (
+        SELECT id 
+        FROM multi_tenant_system.tenant_multi_licenses 
+        WHERE tenant_id IN (SELECT tenant_id FROM AdminTenants) 
+        AND name = 'Tobique'
+    ),
+    AdminTenantUsers AS (
+        SELECT user_id
+        FROM multi_tenant_system.users
+        WHERE 
+            tenant_id IN (SELECT tenant_id FROM AdminTenants) 
+            AND license_id IN (SELECT id FROM TenantLicenses)
+    )
+    SELECT user_id
+    FROM AdminTenantUsers
+) AS AdminTenantUsers
+ON c.user_id = AdminTenantUsers.user_id
+ON CONFLICT (comment_id)
+DO UPDATE SET 
+    user_id = EXCLUDED.user_id,
+    title = EXCLUDED.title,
+    comment = EXCLUDED.comment,
+    commented_by = EXCLUDED.commented_by,
+    status = EXCLUDED.status,
+    role = EXCLUDED.role,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
+
+--    7.  Table: credentials
+--        Query:
+-- Create the table and insert data dynamically
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'credentials'
+    ) THEN
+        CREATE TABLE public.credentials (
+            credential_id integer PRIMARY KEY,
+            tenant_id integer NOT NULL,
+            key character varying(255) NOT NULL,
+            value text,
+            description character varying(255),
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.credentials (
+    credential_id, tenant_id, key, value, description, 
+    created_at, updated_at
+)
+SELECT 
+    c.credential_id, c.tenant_id, c.key, c.value, c.description, 
+    c.created_at, c.updated_at
+FROM multi_tenant_system.credentials c
+INNER JOIN (
+    WITH AdminTenants AS (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    )
+    SELECT tenant_id
+    FROM AdminTenants
+) AS AdminTenants
+ON c.tenant_id = AdminTenants.tenant_id
+ON CONFLICT (credential_id)
+DO UPDATE SET 
+    tenant_id = EXCLUDED.tenant_id,
+    key = EXCLUDED.key,
+    value = EXCLUDED.value,
+    description = EXCLUDED.description,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
+
+-- 8.  Table: deposit_ggr_reports
+--        Query:
+            -- Create the table and insert data dynamically
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'deposit_ggr_reports'
+    ) THEN
+        CREATE TABLE public.deposit_ggr_reports (
+            id integer PRIMARY KEY,
+            license_name character varying(255),
+            license_id integer,
+            casino_name character varying(255),
+            tenant_id integer,
+            country character varying(255),
+            player_type character varying(255),
+            total_player_deposited integer DEFAULT 0,
+            total_rounds integer DEFAULT 0,
+            total_real_bets character varying(255) DEFAULT '0'::character varying,
+            total_real_wins character varying(255) DEFAULT '0'::character varying,
+            total_bonus_bets character varying(255) DEFAULT '0'::character varying,
+            total_bonus_wins character varying(255) DEFAULT '0'::character varying,
+            total_deposits character varying(255) DEFAULT '0'::character varying,
+            total_ggr character varying(255) DEFAULT '0'::character varying,
+            date timestamp with time zone NOT NULL,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.deposit_ggr_reports (
+    id, license_name, license_id, casino_name, tenant_id, country, player_type,
+    total_player_deposited, total_rounds, total_real_bets, total_real_wins,
+    total_bonus_bets, total_bonus_wins, total_deposits, total_ggr, date,
+    created_at, updated_at
+)
+SELECT 
+    dgr.id, dgr.license_name, dgr.license_id, dgr.casino_name, dgr.tenant_id, 
+    dgr.country, dgr.player_type, dgr.total_player_deposited, dgr.total_rounds, 
+    dgr.total_real_bets, dgr.total_real_wins, dgr.total_bonus_bets, 
+    dgr.total_bonus_wins, dgr.total_deposits, dgr.total_ggr, dgr.date,
+    dgr.created_at, dgr.updated_at
+FROM multi_tenant_system.deposit_ggr_reports dgr
+INNER JOIN (
+    WITH AdminTenants AS (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    ),
+    TenantLicenses AS (
+        SELECT id 
+        FROM multi_tenant_system.tenant_multi_licenses 
+        WHERE tenant_id IN (SELECT tenant_id FROM AdminTenants) 
+        AND name = 'Tobique'
+    )
+    SELECT tenant_id, id AS license_id
+    FROM AdminTenants, TenantLicenses
+) AS AdminTenantLicenses
+ON dgr.tenant_id = AdminTenantLicenses.tenant_id 
+AND dgr.license_id = AdminTenantLicenses.license_id
+ON CONFLICT (id)
+DO UPDATE SET 
+    license_name = EXCLUDED.license_name,
+    license_id = EXCLUDED.license_id,
+    casino_name = EXCLUDED.casino_name,
+    tenant_id = EXCLUDED.tenant_id,
+    country = EXCLUDED.country,
+    player_type = EXCLUDED.player_type,
+    total_player_deposited = EXCLUDED.total_player_deposited,
+    total_rounds = EXCLUDED.total_rounds,
+    total_real_bets = EXCLUDED.total_real_bets,
+    total_real_wins = EXCLUDED.total_real_wins,
+    total_bonus_bets = EXCLUDED.total_bonus_bets,
+    total_bonus_wins = EXCLUDED.total_bonus_wins,
+    total_deposits = EXCLUDED.total_deposits,
+    total_ggr = EXCLUDED.total_ggr,
+    date = EXCLUDED.date,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
+
+
+--    9.  Table: email_logs
+--        Query:
+            -- Create the table and insert data dynamically
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'email_logs'
+    ) THEN
+        CREATE TABLE public.email_logs (
+            id integer PRIMARY KEY,
+            user_id integer NOT NULL,
+            subject_title character varying(255) NOT NULL,
+            content text NOT NULL,
+            sender_email character varying(255) NOT NULL,
+            sender_id integer NOT NULL,
+            role character varying(255) NOT NULL,
+            status character varying(255),
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL,
+            more_details jsonb
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.email_logs (
+    id, user_id, subject_title, content, sender_email, sender_id, role, 
+    status, created_at, updated_at, more_details
+)
+SELECT 
+    el.id, el.user_id, el.subject_title, el.content, el.sender_email, 
+    el.sender_id, el.role, el.status, el.created_at, el.updated_at, el.more_details
+FROM multi_tenant_system.email_logs el
+INNER JOIN (
+    WITH AdminTenants AS (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    ),
+    TenantLicenses AS (
+        SELECT id 
+        FROM multi_tenant_system.tenant_multi_licenses 
+        WHERE tenant_id IN (SELECT tenant_id FROM AdminTenants) 
+        AND name = 'Tobique'
+    ),
+    AdminTenantUsers AS (
+        SELECT user_id
+        FROM multi_tenant_system.users
+        WHERE tenant_id IN (SELECT tenant_id FROM AdminTenants) 
+        AND license_id IN (SELECT id FROM TenantLicenses)
+    )
+    SELECT user_id FROM AdminTenantUsers
+) AS AdminTenantUsersFiltered
+ON el.user_id = AdminTenantUsersFiltered.user_id
+ON CONFLICT (id)
+DO UPDATE SET 
+    user_id = EXCLUDED.user_id,
+    subject_title = EXCLUDED.subject_title,
+    content = EXCLUDED.content,
+    sender_email = EXCLUDED.sender_email,
+    sender_id = EXCLUDED.sender_id,
+    role = EXCLUDED.role,
+    status = EXCLUDED.status,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at,
+    more_details = EXCLUDED.more_details;
+    
+-- 10. Table: email_templates
+--        Query:
+            -- Create the table and insert data dynamically
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'email_templates'
+    ) THEN
+        CREATE TABLE public.email_templates (
+            email_template_id integer PRIMARY KEY,
+            label character varying(255) NOT NULL,
+            type integer NOT NULL,
+            tenant_id integer NOT NULL,
+            admin_id integer NOT NULL,
+            is_primary integer NOT NULL,
+            dynamic_data jsonb NOT NULL,
+            template_code jsonb NOT NULL,
+            is_default boolean DEFAULT false NOT NULL,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.email_templates (
+    email_template_id, label, type, tenant_id, admin_id, is_primary, 
+    dynamic_data, template_code, is_default, created_at, updated_at
+)
+SELECT 
+    et.email_template_id, et.label, et.type, et.tenant_id, et.admin_id, 
+    et.is_primary, et.dynamic_data, et.template_code, et.is_default, 
+    et.created_at, et.updated_at
+FROM multi_tenant_system.email_templates et
+INNER JOIN (
+    WITH AdminTenants AS (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    )
+    SELECT tenant_id 
+    FROM AdminTenants
+) AS AdminTenantsFiltered
+ON et.tenant_id = AdminTenantsFiltered.tenant_id
+ON CONFLICT (email_template_id)
+DO UPDATE SET 
+    label = EXCLUDED.label,
+    type = EXCLUDED.type,
+    tenant_id = EXCLUDED.tenant_id,
+    admin_id = EXCLUDED.admin_id,
+    is_primary = EXCLUDED.is_primary,
+    dynamic_data = EXCLUDED.dynamic_data,
+    template_code = EXCLUDED.template_code,
+    is_default = EXCLUDED.is_default,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
+
+
+
+--    11. Table: hub88_prepaids
+--        Query:
+            -- Create the table and insert data dynamically
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'hub88_prepaids'
+    ) THEN
+        CREATE TABLE public.hub88_prepaids (
+            id bigint PRIMARY KEY,
+            prepaid_uuid character varying(255) NOT NULL,
+            game_code character varying(255) NOT NULL,
+            bet_count bigint,
+            bet_value bigint,
+            tenant_id integer NOT NULL,
+            currency character varying(255) NOT NULL,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL,
+            name character varying,
+            master_casino_game_id bigint
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.hub88_prepaids (
+    id, prepaid_uuid, game_code, bet_count, bet_value, tenant_id, 
+    currency, created_at, updated_at, name, master_casino_game_id
+)
+SELECT 
+    hp.id, hp.prepaid_uuid, hp.game_code, hp.bet_count, hp.bet_value, 
+    hp.tenant_id, hp.currency, hp.created_at, hp.updated_at, 
+    hp.name, hp.master_casino_game_id
+FROM multi_tenant_system.hub88_prepaids hp
+INNER JOIN (
+    WITH AdminTenants AS (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    )
+    SELECT tenant_id 
+    FROM AdminTenants
+) AS AdminTenantsFiltered
+ON hp.tenant_id = AdminTenantsFiltered.tenant_id
+ON CONFLICT (id)
+DO UPDATE SET 
+    prepaid_uuid = EXCLUDED.prepaid_uuid,
+    game_code = EXCLUDED.game_code,
+    bet_count = EXCLUDED.bet_count,
+    bet_value = EXCLUDED.bet_value,
+    tenant_id = EXCLUDED.tenant_id,
+    currency = EXCLUDED.currency,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at,
+    name = EXCLUDED.name,
+    master_casino_game_id = EXCLUDED.master_casino_game_id;
+
+
+
+
+
+ --   12. Table: notification_receivers
+ --       Query:
+            -- Create the table and insert data dynamically
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'notification_receivers'
+    ) THEN
+        CREATE TABLE public.notification_receivers (
+            notification_receiver_id integer PRIMARY KEY,
+            receiver_type character varying(255) NOT NULL,
+            receiver_id integer NOT NULL,
+            notification_id integer NOT NULL,
+            is_read boolean,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.notification_receivers (
+    notification_receiver_id, receiver_type, receiver_id, notification_id, 
+    is_read, created_at, updated_at
+)
+SELECT 
+    nr.notification_receiver_id, nr.receiver_type, nr.receiver_id, 
+    nr.notification_id, nr.is_read, nr.created_at, nr.updated_at
+FROM multi_tenant_system.notification_receivers nr
+INNER JOIN (
+    WITH AdminTenants AS (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    ),
+    TenantLicenses AS (
+        SELECT id 
+        FROM multi_tenant_system.tenant_multi_licenses 
+        WHERE tenant_id IN (SELECT tenant_id FROM AdminTenants) 
+        AND name = 'Tobique'
+    ),
+    AdminTenantUsers AS (
+        SELECT user_id
+        FROM multi_tenant_system.users
+        WHERE 
+            multi_tenant_system.users.tenant_id IN (SELECT tenant_id FROM AdminTenants) 
+            AND multi_tenant_system.users.license_id IN (SELECT id FROM TenantLicenses)
+    )
+    SELECT user_id 
+    FROM AdminTenantUsers
+) AS AdminTenantUsersFiltered
+ON nr.receiver_id = AdminTenantUsersFiltered.user_id
+ON CONFLICT (notification_receiver_id)
+DO UPDATE SET 
+    receiver_type = EXCLUDED.receiver_type,
+    receiver_id = EXCLUDED.receiver_id,
+    notification_id = EXCLUDED.notification_id,
+    is_read = EXCLUDED.is_read,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
+
+
+
+--    13. Table: notifications
+--    Query:
+            -- Create the table and insert data dynamically
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'notifications'
+    ) THEN
+        CREATE TABLE public.notifications (
+            notification_id integer PRIMARY KEY,
+            sender_type character varying(255) NOT NULL,
+            sender_id integer NOT NULL,
+            reference_type character varying(255) NOT NULL,
+            reference_id integer NOT NULL,
+            notification_message character varying(255),
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.notifications (
+    notification_id, sender_type, sender_id, reference_type, reference_id, 
+    notification_message, created_at, updated_at
+)
+SELECT 
+    n.notification_id, n.sender_type, n.sender_id, n.reference_type, 
+    n.reference_id, n.notification_message, n.created_at, n.updated_at
+FROM multi_tenant_system.notifications n
+INNER JOIN (
+    WITH AdminTenants AS (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    ),
+    TenantLicenses AS (
+        SELECT id 
+        FROM multi_tenant_system.tenant_multi_licenses 
+        WHERE tenant_id IN (SELECT tenant_id FROM AdminTenants) 
+        AND name = 'Tobique'
+    ),
+    AdminTenantUsers AS (
+        SELECT user_id
+        FROM multi_tenant_system.users
+        WHERE 
+            multi_tenant_system.users.tenant_id IN (SELECT tenant_id FROM AdminTenants) 
+            AND multi_tenant_system.users.license_id IN (SELECT id FROM TenantLicenses)
+    )
+    SELECT user_id 
+    FROM AdminTenantUsers
+) AS AdminTenantUsersFiltered
+ON n.sender_id = AdminTenantUsersFiltered.user_id
+ON CONFLICT (notification_id)
+DO UPDATE SET 
+    sender_type = EXCLUDED.sender_type,
+    sender_id = EXCLUDED.sender_id,
+    reference_type = EXCLUDED.reference_type,
+    reference_id = EXCLUDED.reference_id,
+    notification_message = EXCLUDED.notification_message,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
+
+--    14. Table: page_banners
+--        Query:
+            -- Create the table and insert data dynamically
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'page_banners'
+    ) THEN
+        CREATE TABLE public.page_banners (
+            page_banner_id integer PRIMARY KEY,
+            name character varying(255),
+            image_url character varying(255),
+            redirect_url character varying(255),
+            banner_type character varying(255),
+            "order" integer,
+            is_active boolean,
+            tenant_id integer,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.page_banners (
+    page_banner_id, name, image_url, redirect_url, banner_type, 
+    "order", is_active, tenant_id, created_at, updated_at
+)
+SELECT 
+    pb.page_banner_id, pb.name, pb.image_url, pb.redirect_url, pb.banner_type, 
+    pb."order", pb.is_active, pb.tenant_id, pb.created_at, pb.updated_at
+FROM multi_tenant_system.page_banners pb
+INNER JOIN (
+    WITH AdminTenants AS (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    )
+    SELECT tenant_id 
+    FROM AdminTenants
+) AS AdminTenantsFiltered
+ON pb.tenant_id = AdminTenantsFiltered.tenant_id
+ON CONFLICT (page_banner_id)
+DO UPDATE SET 
+    name = EXCLUDED.name,
+    image_url = EXCLUDED.image_url,
+    redirect_url = EXCLUDED.redirect_url,
+    banner_type = EXCLUDED.banner_type,
+    "order" = EXCLUDED."order",
+    is_active = EXCLUDED.is_active,
+    tenant_id = EXCLUDED.tenant_id,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
+
+--    15. Table: player_liabilty
+--        Query:
+            -- Create the table and insert data dynamically
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'player_liability'
+    ) THEN
+        CREATE TABLE public.player_liability (
+            player_liabilty_id integer PRIMARY KEY,
+            date timestamp with time zone NOT NULL,
+            user_liability_data jsonb NOT NULL,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL,
+            deposit_data jsonb,
+            --summed_data jsonb,
+            conversion_rates jsonb
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.player_liability (
+player_liabilty_id, 
+date, 
+user_liability_data, 
+created_at, 
+updated_at, 
+deposit_data, 
+--summed_data, 
+conversion_rates
+)
+SELECT 
+pl.player_liabilty_id, 
+pl.date, 
+pl.user_liability_data, 
+pl.created_at, 
+pl.updated_at, 
+pl.deposit_data, 
+--pl.summed_data, 
+pl.conversion_rates
+FROM multi_tenant_system.player_liabilty pl
+INNER JOIN (
+    WITH AdminTenants AS (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    ),
+    TenantLicenses AS (
+        SELECT id 
+        FROM multi_tenant_system.tenant_multi_licenses 
+        WHERE tenant_id IN (SELECT tenant_id FROM AdminTenants) 
+        AND name = 'Tobique'
+    ),
+    AdminTenantUsers AS (
+        SELECT user_id
+        FROM multi_tenant_system.users
+        WHERE tenant_id IN (SELECT tenant_id FROM AdminTenants) 
+        AND license_id IN (SELECT id FROM TenantLicenses)
+    )
+    SELECT user_id 
+    FROM AdminTenantUsers
+) AS AdminTenantUsersFiltered
+ON EXISTS (
+    SELECT 1 
+    FROM jsonb_array_elements(
+        CASE 
+            WHEN jsonb_typeof(pl.user_liability_data) = 'array' 
+            THEN pl.user_liability_data 
+            ELSE '[]'::jsonb 
+        END
+    ) AS user_data
+    WHERE (user_data->>'playerId')::INTEGER = AdminTenantUsersFiltered.user_id
+)
+ON CONFLICT (player_liabilty_id)
+DO UPDATE SET 
+    date = EXCLUDED.date,
+    user_liability_data = EXCLUDED.user_liability_data,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at,
+    deposit_data = EXCLUDED.deposit_data,
+    --summed_data = EXCLUDED.summed_data,
+    conversion_rates = EXCLUDED.conversion_rates;
+
+--    16. Table: reviews
+--        Query: 
+            -- Create the table and insert data dynamically
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'reviews'
+    ) THEN
+        CREATE TABLE public.reviews (
+            review_id integer PRIMARY KEY,
+            user_name character varying(255) NOT NULL,
+            description text NOT NULL,
+            rating double precision NOT NULL,
+            status boolean NOT NULL,
+            tenant_id integer NOT NULL,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.reviews (
+    review_id, user_name, description, rating, status, tenant_id, created_at, updated_at
+)
+SELECT 
+    r.review_id, r.user_name, r.description, r.rating, 
+    r.status, r.tenant_id, r.created_at, r.updated_at
+FROM multi_tenant_system.reviews r
+WHERE r.tenant_id IN (
+    SELECT tenant_id 
+    FROM multi_tenant_system.tenants 
+    WHERE admin_user_id = 617
+)
+ON CONFLICT (review_id)
+DO UPDATE SET 
+    user_name = EXCLUDED.user_name,
+    description = EXCLUDED.description,
+    rating = EXCLUDED.rating,
+    status = EXCLUDED.status,
+    tenant_id = EXCLUDED.tenant_id,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
+
+--    17. Table: tenant_configurations
+--        Query:
+		-- Create the table and insert data dynamically
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'tenant_configurations'
+    ) THEN
+        CREATE TABLE public.tenant_configurations (
+            tenant_configuration_id INTEGER PRIMARY KEY,
+            tenant_id INTEGER,
+            allowed_currencies JSONB,
+            loyalty_level JSONB,
+            loyalty_point JSONB,
+            allowed_languages JSONB,
+            banner_url JSONB,
+            logo_url VARCHAR(255),
+            created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL,
+            payment_categories JSONB DEFAULT '{"deposit": ["CREDITCARD", "WALLET", "CRYPTO", "OTHER", "INSTANTBANKING", "VOUCHER"], "withdraw": ["CREDITCARD", "WALLET", "CRYPTO", "OTHER", "INSTANTBANKING", "VOUCHER"]}'::JSONB NOT NULL,
+            banned_games_list_id INTEGER DEFAULT 1,
+            banners JSONB,
+            aml_settings JSONB,
+            rg_details JSONB,
+            reality_setting JSONB,
+            aggregator_ids JSONB,
+            exchange_rates JSONB,
+            affiliate_integrated VARCHAR(255),
+            affiliate_keys JSONB,
+            sumsub_countries JSONB,
+            in_active_countries JSONB,
+            phone_verification BOOLEAN DEFAULT FALSE,
+            in_active_aggregators JSONB,
+            piq_errors JSONB,
+            kyc_settings JSONB,
+            ban_player_setting BOOLEAN DEFAULT FALSE,
+            duplicate_user BOOLEAN DEFAULT FALSE NOT NULL,
+            country_names JSONB,
+            redirection_config JSONB,
+            chat_config JSONB, -- Uncommented
+            component_config JSONB
+        );
+    END IF;
+END $$;
+
+
+-- Insert or update data
+INSERT INTO public.tenant_configurations (
+    tenant_configuration_id, 
+	tenant_id, 
+	allowed_currencies, 
+	loyalty_level, 
+    loyalty_point, 
+	allowed_languages, 
+	banner_url, 
+	logo_url, 
+    created_at, 
+	updated_at, 
+	payment_categories, 
+	banned_games_list_id, 
+    banners, 
+	aml_settings, 
+	rg_details, 
+	reality_setting, 
+    aggregator_ids, 
+	exchange_rates, 
+	affiliate_integrated, 
+	affiliate_keys, 
+    sumsub_countries, 
+	in_active_countries, 
+	phone_verification, 
+	in_active_aggregators, 
+    piq_errors, 
+	kyc_settings, 
+	ban_player_setting, 
+	duplicate_user, 
+    country_names, 
+	--crm_config, 
+	redirection_config, 
+	--chat_config
+    -- Remove component_config from this list
+)
+SELECT 
+    tc.tenant_configuration_id, 
+	tc.tenant_id, 
+	tc.allowed_currencies, 
+	tc.loyalty_level, 
+    tc.loyalty_point, 
+	tc.allowed_languages, 
+	tc.banner_url, 
+	tc.logo_url, 
+    tc.created_at, 
+	tc.updated_at, 
+	tc.payment_categories, 
+	tc.banned_games_list_id, 
+    tc.banners, 
+	tc.aml_settings, 
+	tc.rg_details, 
+	tc.reality_setting, 
+    tc.aggregator_ids, 
+	tc.exchange_rates, 
+	tc.affiliate_integrated, 
+	tc.affiliate_keys, 
+    tc.sumsub_countries, 
+	tc.in_active_countries, 
+	tc.phone_verification, 
+	tc.in_active_aggregators, 
+    tc.piq_errors, 
+	tc.kyc_settings, 
+	tc.ban_player_setting, 
+	tc.duplicate_user, 
+    tc.country_names, 
+	--tc.crm_config, 
+	tc.redirection_config
+    -- Ensure component_config is removed from here also
+FROM 
+    multi_tenant_system.tenant_configurations tc
+WHERE 
+    tc.tenant_id IN (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    )
+ON CONFLICT (tenant_configuration_id)
+DO UPDATE SET 
+    tenant_id = EXCLUDED.tenant_id,
+    allowed_currencies = EXCLUDED.allowed_currencies,
+    loyalty_level = EXCLUDED.loyalty_level,
+    loyalty_point = EXCLUDED.loyalty_point,
+    allowed_languages = EXCLUDED.allowed_languages,
+    banner_url = EXCLUDED.banner_url,
+    logo_url = EXCLUDED.logo_url,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at,
+    payment_categories = EXCLUDED.payment_categories,
+    banned_games_list_id = EXCLUDED.banned_games_list_id,
+    banners = EXCLUDED.banners,
+    aml_settings = EXCLUDED.aml_settings,
+    rg_details = EXCLUDED.rg_details,
+    reality_setting = EXCLUDED.reality_setting,
+    aggregator_ids = EXCLUDED.aggregator_ids,
+    exchange_rates = EXCLUDED.exchange_rates,
+    affiliate_integrated = EXCLUDED.affiliate_integrated,
+    affiliate_keys = EXCLUDED.affiliate_keys,
+    sumsub_countries = EXCLUDED.sumsub_countries,
+    in_active_countries = EXCLUDED.in_active_countries,
+    phone_verification = EXCLUDED.phone_verification,
+    in_active_aggregators = EXCLUDED.in_active_aggregators,
+    piq_errors = EXCLUDED.piq_errors,
+    kyc_settings = EXCLUDED.kyc_settings,
+    ban_player_setting = EXCLUDED.ban_player_setting,
+    duplicate_user = EXCLUDED.duplicate_user,
+    country_names = EXCLUDED.country_names,
+    --crm_config = EXCLUDED.crm_config,
+    redirection_config = EXCLUDED.redirection_config
+    -- Ensure component_config is removed from this list
+	
+-- Create the table public.tenant_gallery if it doesn't exist
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'tenant_gallery'
+    ) THEN
+        CREATE TABLE public.tenant_gallery (
+            tenant_image_id INTEGER PRIMARY KEY,
+            tenant_id INTEGER NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            image_url VARCHAR(255) NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL,
+            image_bucket_type VARCHAR(255) DEFAULT 'admin' NOT NULL
+        );
+    END IF;
+END $$;
+
+
+INSERT INTO public.tenant_gallery (
+    tenant_image_id, tenant_id, name, image_url, 
+    created_at, updated_at, image_bucket_type
+)
+SELECT 
+    tg.tenant_image_id, tg.tenant_id, tg.name, tg.image_url, 
+    tg.created_at, tg.updated_at, tg.image_bucket_type
+FROM 
+    multi_tenant_system.tenant_gallery tg
+WHERE 
+    tg.tenant_id IN (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    )
+ON CONFLICT (tenant_image_id) DO UPDATE SET 
+    tenant_id = EXCLUDED.tenant_id,
+    name = EXCLUDED.name,
+    image_url = EXCLUDED.image_url,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at,
+    image_bucket_type = EXCLUDED.image_bucket_type;
+
+
+--    19. Table: tenant_multi_licenses
+--        Query:
+            -- Create the table and insert data dynamically
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'tenant_multi_licenses'
+    ) THEN
+        CREATE TABLE public.tenant_multi_licenses (
+            id integer PRIMARY KEY,
+            license_no character varying(255),
+            tenant_id integer NOT NULL,
+            name character varying(255),
+            cred_details jsonb,
+            description character varying(255),
+            is_active boolean DEFAULT true,
+            country_codes jsonb,
+            html text,
+            script text,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL,
+            parent_license_id integer,
+            is_default boolean
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.tenant_multi_licenses (
+    id, license_no, tenant_id, name, 
+    cred_details, description, is_active, 
+    country_codes, html, script, 
+    created_at, updated_at, parent_license_id, is_default
+)
+SELECT 
+    tml.id, tml.license_no, tml.tenant_id, tml.name, 
+    tml.cred_details, tml.description, tml.is_active, 
+    tml.country_codes, tml.html, tml.script, 
+    tml.created_at, tml.updated_at, tml.parent_license_id, tml.is_default
+FROM 
+    multi_tenant_system.tenant_multi_licenses tml
+WHERE 
+    tml.tenant_id IN (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    )
+    AND tml.name = 'Tobique'
+ON CONFLICT (id)
+DO UPDATE SET 
+    license_no = EXCLUDED.license_no,
+    tenant_id = EXCLUDED.tenant_id,
+    name = EXCLUDED.name,
+    cred_details = EXCLUDED.cred_details,
+    description = EXCLUDED.description,
+    is_active = EXCLUDED.is_active,
+    country_codes = EXCLUDED.country_codes,
+    html = EXCLUDED.html,
+    script = EXCLUDED.script,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at,
+    parent_license_id = EXCLUDED.parent_license_id,
+    is_default = EXCLUDED.is_default;
+
+
+
+
+
+--    20. Table: tenant_registrations
+--        Query:
+            -- Create the table and insert data dynamically
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'tenant_registrations'
+    ) THEN
+        CREATE TABLE public.tenant_registrations (
+            tenant_registration_id integer PRIMARY KEY,
+            tenant_id integer NOT NULL,
+            email integer DEFAULT 2 NOT NULL,
+            password integer DEFAULT 2 NOT NULL,
+            confirm_password integer DEFAULT 2 NOT NULL,
+            username integer DEFAULT 0 NOT NULL,
+            first_name integer DEFAULT 2 NOT NULL,
+            last_name integer DEFAULT 2 NOT NULL,
+            date_of_birth integer DEFAULT 2 NOT NULL,
+            address integer DEFAULT 2 NOT NULL,
+            phone integer DEFAULT 0 NOT NULL,
+            gender integer DEFAULT 2 NOT NULL,
+            preferred_language integer DEFAULT 0 NOT NULL,
+            country_code integer DEFAULT 2 NOT NULL,
+            news_letter integer DEFAULT 0 NOT NULL,
+            currency_code integer DEFAULT 2 NOT NULL,
+            sms integer DEFAULT 0 NOT NULL,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL,
+            newsletter_and_sms integer DEFAULT 0 NOT NULL
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.tenant_registrations (
+    tenant_registration_id, tenant_id, email, password, 
+    confirm_password, username, first_name, last_name, 
+    date_of_birth, address, phone, gender, 
+    preferred_language, country_code, news_letter, 
+    currency_code, sms, created_at, updated_at, newsletter_and_sms
+)
+SELECT 
+    tr.tenant_registration_id, tr.tenant_id, tr.email, tr.password, 
+    tr.confirm_password, tr.username, tr.first_name, tr.last_name, 
+    tr.date_of_birth, tr.address, tr.phone, tr.gender, 
+    tr.preferred_language, tr.country_code, tr.news_letter, 
+    tr.currency_code, tr.sms, tr.created_at, tr.updated_at, tr.newsletter_and_sms
+FROM 
+    multi_tenant_system.tenant_registrations tr
+WHERE 
+    tr.tenant_id IN (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    )
+ON CONFLICT (tenant_registration_id)
+DO UPDATE SET 
+    tenant_id = EXCLUDED.tenant_id,
+    email = EXCLUDED.email,
+    password = EXCLUDED.password,
+    confirm_password = EXCLUDED.confirm_password,
+    username = EXCLUDED.username,
+    first_name = EXCLUDED.first_name,
+    last_name = EXCLUDED.last_name,
+    date_of_birth = EXCLUDED.date_of_birth,
+    address = EXCLUDED.address,
+    phone = EXCLUDED.phone,
+    gender = EXCLUDED.gender,
+    preferred_language = EXCLUDED.preferred_language,
+    country_code = EXCLUDED.country_code,
+    news_letter = EXCLUDED.news_letter,
+    currency_code = EXCLUDED.currency_code,
+    sms = EXCLUDED.sms,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at,
+    newsletter_and_sms = EXCLUDED.newsletter_and_sms;
+
+--    21. Table: tenant_theme_settings
+--        Query:
+            -- Create the table and insert data dynamically
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'tenant_theme_settings'
+    ) THEN
+        CREATE TABLE public.tenant_theme_settings (
+            tenant_theme_setting_id integer PRIMARY KEY,
+            tenant_id integer NOT NULL,
+            language_id integer,
+            theme_attr jsonb,
+            logo_url character varying(255),
+            theme_id integer,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.tenant_theme_settings (
+    tenant_theme_setting_id, tenant_id, language_id, 
+    theme_attr, logo_url, theme_id, 
+    created_at, updated_at
+)
+SELECT 
+    tts.tenant_theme_setting_id, tts.tenant_id, tts.language_id, 
+    tts.theme_attr, tts.logo_url, tts.theme_id, 
+    tts.created_at, tts.updated_at
+FROM 
+    multi_tenant_system.tenant_theme_settings tts
+WHERE 
+    tts.tenant_id IN (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    )
+ON CONFLICT (tenant_theme_setting_id)
+DO UPDATE SET 
+    tenant_id = EXCLUDED.tenant_id,
+    language_id = EXCLUDED.language_id,
+    theme_attr = EXCLUDED.theme_attr,
+    logo_url = EXCLUDED.logo_url,
+    theme_id = EXCLUDED.theme_id,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
+
+
+
+
+
+--    22. Table: tenants
+--       Query:
+            -- Create the table if it doesn't exist and insert data
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'tenants'
+    ) THEN
+        CREATE TABLE public.tenants (
+            tenant_id integer PRIMARY KEY,
+            name character varying(255),
+            domain character varying(255),
+            is_active boolean DEFAULT true,
+            primary_currency character varying(255),
+            super_admin_user_id integer,
+            admin_user_id integer NOT NULL,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.tenants (
+    tenant_id, name, domain, is_active, 
+    primary_currency, super_admin_user_id, admin_user_id, 
+    created_at, updated_at
+)
+SELECT 
+    t.tenant_id, t.name, t.domain, t.is_active, 
+    t.primary_currency, t.super_admin_user_id, t.admin_user_id, 
+    t.created_at, t.updated_at
+FROM 
+    multi_tenant_system.tenants t
+WHERE 
+    t.tenant_id IN (
+        SELECT tenant_id
+        FROM multi_tenant_system.tenants
+        WHERE admin_user_id = 617
+    )
+ON CONFLICT (tenant_id)
+DO UPDATE SET 
+    name = EXCLUDED.name,
+    domain = EXCLUDED.domain,
+    is_active = EXCLUDED.is_active,
+    primary_currency = EXCLUDED.primary_currency,
+    super_admin_user_id = EXCLUDED.super_admin_user_id,
+    admin_user_id = EXCLUDED.admin_user_id,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
+
+
+
+
+
+    
+
+--   23. Table: tournaments
+--   Query:
+-- Create the table if it doesn't exist and insert data
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'tournament'
+    ) THEN
+        CREATE TABLE public.tournament (
+            tournament_id integer PRIMARY KEY,
+            title character varying(255) NOT NULL,
+            start_at timestamp with time zone NOT NULL,
+            end_at timestamp with time zone NOT NULL,
+            prizes jsonb,
+            currency character varying(255) NOT NULL,
+            banner_url character varying(255),
+            is_active boolean DEFAULT true,
+            description text NOT NULL,
+            games jsonb NOT NULL,
+            leader_board_url character varying(255),
+            countries jsonb,
+            min_bet_amount double precision,
+            payouts character varying(255),
+            tournament_mechanics character varying(255),
+            accepted_currencies jsonb NOT NULL,
+            leader_board_id character varying(255) NOT NULL,
+            rules text NOT NULL,
+            prize_pool jsonb,
+            prize_places character varying(255),
+            admin_id integer NOT NULL,
+            tenant_id integer NOT NULL,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.tournament (
+    tournament_id, title, start_at, end_at, prizes, currency, 
+    banner_url, is_active, description, games, leader_board_url, 
+    countries, min_bet_amount, payouts, tournament_mechanics, 
+    accepted_currencies, leader_board_id, rules, prize_pool, 
+    prize_places, admin_id, tenant_id, created_at, updated_at
+)
+SELECT 
+    t.tournament_id, t.title, t.start_at, t.end_at, t.prizes, t.currency,
+    t.banner_url, t.is_active, t.description, t.games, t.leader_board_url,
+    t.countries, t.min_bet_amount, t.payouts, t.tournament_mechanics,
+    t.accepted_currencies, t.leader_board_id, t.rules, t.prize_pool,
+    t.prize_places, t.admin_id, t.tenant_id, t.created_at, t.updated_at
+FROM 
+    multi_tenant_system.tournament t
+WHERE 
+    t.tenant_id IN (
+        SELECT tenant_id 
+        FROM multi_tenant_system.tenants 
+        WHERE admin_user_id = 617
+    )
+ON CONFLICT (tournament_id)
+DO UPDATE SET 
+    title = EXCLUDED.title,
+    start_at = EXCLUDED.start_at,
+    end_at = EXCLUDED.end_at,
+    prizes = EXCLUDED.prizes,
+    currency = EXCLUDED.currency,
+    banner_url = EXCLUDED.banner_url,
+    is_active = EXCLUDED.is_active,
+    description = EXCLUDED.description,
+    games = EXCLUDED.games,
+    leader_board_url = EXCLUDED.leader_board_url,
+    countries = EXCLUDED.countries,
+    min_bet_amount = EXCLUDED.min_bet_amount,
+    payouts = EXCLUDED.payouts,
+    tournament_mechanics = EXCLUDED.tournament_mechanics,
+    accepted_currencies = EXCLUDED.accepted_currencies,
+    leader_board_id = EXCLUDED.leader_board_id,
+    rules = EXCLUDED.rules,
+    prize_pool = EXCLUDED.prize_pool,
+    prize_places = EXCLUDED.prize_places,
+    admin_id = EXCLUDED.admin_id,
+    tenant_id = EXCLUDED.tenant_id,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
+
+--    24. Table: transaction_bankings
+--        Query:
+ -- Create the table if it doesn't exist and insert data based on the conditions
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'transaction_bankings'
+    ) THEN
+        CREATE TABLE public.transaction_bankings (
+            transaction_banking_id integer PRIMARY KEY,
+            actionee_type character varying(255),
+            actionee_id integer,
+            actionee_email character varying(255),
+            actionee_name character varying(255),
+            target_id integer,
+            wallet_id integer,
+            currency_code character varying(255),
+            conversion_rate double precision,
+            primary_currency_amount double precision,
+            amount_type integer,
+            amount double precision,
+            before_balance double precision,
+            payment_provider character varying(255),
+            status integer,
+            tenant_id integer,
+            country_code character varying(255) NOT NULL,
+            admin_id integer NOT NULL,
+            transaction_id uuid,
+            transaction_date_time character varying(255),
+            transaction_type character varying(255),
+            is_success boolean,
+            error_description character varying(255),
+            payment_method character varying(255),
+            payment_transaction_id character varying(255),
+            payment_transaction_name character varying(255),
+            more_details jsonb,
+            is_first_deposit boolean DEFAULT false NOT NULL,
+            elastic_updated boolean DEFAULT false NOT NULL,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.transaction_bankings (
+    transaction_banking_id, actionee_type, actionee_id, actionee_email, actionee_name, 
+    target_id, wallet_id, currency_code, conversion_rate, primary_currency_amount, 
+    amount_type, amount, before_balance, payment_provider, status, tenant_id, 
+    country_code, admin_id, transaction_id, transaction_date_time, transaction_type, 
+    is_success, error_description, payment_method, payment_transaction_id, 
+    payment_transaction_name, more_details, is_first_deposit, elastic_updated, 
+    created_at, updated_at
+)
+SELECT 
+    t.transaction_banking_id, t.actionee_type, t.actionee_id, t.actionee_email, 
+    t.actionee_name, t.target_id, t.wallet_id, t.currency_code, 
+    t.conversion_rate, t.primary_currency_amount, t.amount_type, t.amount, 
+    t.before_balance, t.payment_provider, t.status, t.tenant_id, 
+    t.country_code, t.admin_id, t.transaction_id, t.transaction_date_time, 
+    t.transaction_type, t.is_success, t.error_description, t.payment_method, 
+    t.payment_transaction_id, t.payment_transaction_name, t.more_details, 
+    t.is_first_deposit, t.elastic_updated, t.created_at, t.updated_at
+FROM 
+    multi_tenant_system.transaction_bankings t
+INNER JOIN (
+    SELECT user_id
+    FROM multi_tenant_system.users
+    WHERE 
+        tenant_id IN (
+            SELECT tenant_id 
+            FROM multi_tenant_system.tenants 
+            WHERE admin_user_id = 617
+        )
+        AND license_id IN (
+            SELECT id 
+            FROM multi_tenant_system.tenant_multi_licenses 
+            WHERE tenant_id IN (
+                SELECT tenant_id 
+                FROM multi_tenant_system.tenants 
+                WHERE admin_user_id = 617
+            ) 
+            AND name = 'Tobique'
+        )
+) AdminTenantUsers 
+    ON t.target_id = AdminTenantUsers.user_id
+WHERE 
+    t.admin_id = 617
+ON CONFLICT (transaction_banking_id)
+DO UPDATE SET 
+    actionee_type = EXCLUDED.actionee_type,
+    actionee_id = EXCLUDED.actionee_id,
+    actionee_email = EXCLUDED.actionee_email,
+    actionee_name = EXCLUDED.actionee_name,
+    target_id = EXCLUDED.target_id,
+    wallet_id = EXCLUDED.wallet_id,
+    currency_code = EXCLUDED.currency_code,
+    conversion_rate = EXCLUDED.conversion_rate,
+    primary_currency_amount = EXCLUDED.primary_currency_amount,
+    amount_type = EXCLUDED.amount_type,
+    amount = EXCLUDED.amount,
+    before_balance = EXCLUDED.before_balance,
+    payment_provider = EXCLUDED.payment_provider,
+    status = EXCLUDED.status,
+    tenant_id = EXCLUDED.tenant_id,
+    country_code = EXCLUDED.country_code,
+    admin_id = EXCLUDED.admin_id,
+    transaction_id = EXCLUDED.transaction_id,
+    transaction_date_time = EXCLUDED.transaction_date_time,
+    transaction_type = EXCLUDED.transaction_type,
+    is_success = EXCLUDED.is_success,
+    error_description = EXCLUDED.error_description,
+    payment_method = EXCLUDED.payment_method,
+    payment_transaction_id = EXCLUDED.payment_transaction_id,
+    payment_transaction_name = EXCLUDED.payment_transaction_name,
+    more_details = EXCLUDED.more_details,
+    is_first_deposit = EXCLUDED.is_first_deposit,
+    elastic_updated = EXCLUDED.elastic_updated,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
+
+--    25. Table: unique_user_identification
+--        Query:
+-- Create the table if it doesn't exist and insert data based on the conditions
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'unique_user_identification'
+    ) THEN
+        CREATE TABLE public.unique_user_identification (
+            unique_user_identification_id integer PRIMARY KEY,
+            tenant_id integer NOT NULL,
+            admin_id integer NOT NULL,
+            unique_key character varying(255) NOT NULL,
+            user_id integer,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.unique_user_identification (
+    unique_user_identification_id, tenant_id, admin_id, unique_key, user_id, 
+    created_at, updated_at
+)
+SELECT 
+    u.unique_user_identification_id, u.tenant_id, u.admin_id, 
+    u.unique_key, u.user_id, u.created_at, u.updated_at
+FROM 
+    multi_tenant_system.unique_user_identification u
+INNER JOIN (
+    SELECT user_id
+    FROM multi_tenant_system.users
+    WHERE 
+        tenant_id IN (
+            SELECT tenant_id 
+            FROM multi_tenant_system.tenants 
+            WHERE admin_user_id = 617
+        )
+        AND license_id IN (
+            SELECT id 
+            FROM multi_tenant_system.tenant_multi_licenses 
+            WHERE tenant_id IN (
+                SELECT tenant_id 
+                FROM multi_tenant_system.tenants 
+                WHERE admin_user_id = 617
+            ) 
+            AND name = 'Tobique'
+        )
+) AdminTenantUsers 
+    ON u.user_id = AdminTenantUsers.user_id
+WHERE 
+    u.admin_id = 617
+ON CONFLICT (unique_user_identification_id)
+DO UPDATE SET 
+    tenant_id = EXCLUDED.tenant_id,
+    admin_id = EXCLUDED.admin_id,
+    unique_key = EXCLUDED.unique_key,
+    user_id = EXCLUDED.user_id,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
+
+
+--    26. Table: user_action_trail
+--        Query:
+ -- Create the table if it doesn't exist and insert data based on the conditions
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'user_action_trail'
+    ) THEN
+        CREATE TABLE public.user_action_trail (
+            id integer PRIMARY KEY,
+            user_id integer,
+            admin_id integer,
+            role integer DEFAULT 1 NOT NULL,
+            action character varying(255) NOT NULL,
+            description character varying(255) NOT NULL,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL,
+            name character varying,
+            before_value text,
+            after_value text
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.user_action_trail (
+    id, user_id, admin_id, role, action, description, created_at, updated_at, 
+    name, before_value, after_value
+)
+SELECT 
+    uat.id, uat.user_id, uat.admin_id, uat.role, uat.action, uat.description, 
+    uat.created_at, uat.updated_at, uat.name, uat.before_value, uat.after_value
+FROM 
+    multi_tenant_system.user_action_trail uat
+INNER JOIN (
+    SELECT user_id
+    FROM multi_tenant_system.users
+    WHERE 
+        tenant_id IN (
+            SELECT tenant_id 
+            FROM multi_tenant_system.tenants 
+            WHERE admin_user_id = 617
+        )
+        AND license_id IN (
+            SELECT id 
+            FROM multi_tenant_system.tenant_multi_licenses 
+            WHERE tenant_id IN (
+                SELECT tenant_id 
+                FROM multi_tenant_system.tenants 
+                WHERE admin_user_id = 617
+            ) 
+            AND name = 'Tobique'
+        )
+) AdminTenantUsers 
+    ON uat.user_id = AdminTenantUsers.user_id
+WHERE 
+    uat.role = 2 
+    AND uat.admin_id = 617
+ON CONFLICT (id)
+DO UPDATE SET 
+    user_id = EXCLUDED.user_id,
+    admin_id = EXCLUDED.admin_id,
+    role = EXCLUDED.role,
+    action = EXCLUDED.action,
+    description = EXCLUDED.description,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at,
+    name = EXCLUDED.name,
+    before_value = EXCLUDED.before_value,
+    after_value = EXCLUDED.after_value;
+
+--    27. Table: user_affiliates
+--        Query:
+-- Create the table if it doesn't exist and insert data based on the conditions
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'user_affiliates'
+    ) THEN
+        CREATE TABLE public.user_affiliates (
+            id integer PRIMARY KEY,
+            user_id integer NOT NULL,
+            fields jsonb,
+            is_checked boolean NOT NULL,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL,
+            tenant_id integer NOT NULL
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.user_affiliates (
+    id, user_id, fields, is_checked, created_at, updated_at, tenant_id
+)
+SELECT 
+    ua.id, ua.user_id, ua.fields, ua.is_checked, ua.created_at, ua.updated_at, ua.tenant_id
+FROM 
+    multi_tenant_system.user_affiliates ua
+INNER JOIN (
+    SELECT user_id
+    FROM multi_tenant_system.users
+    WHERE 
+        tenant_id IN (
+            SELECT tenant_id 
+            FROM multi_tenant_system.tenants 
+            WHERE admin_user_id = 617
+        )
+        AND license_id IN (
+            SELECT id 
+            FROM multi_tenant_system.tenant_multi_licenses 
+            WHERE tenant_id IN (
+                SELECT tenant_id 
+                FROM multi_tenant_system.tenants 
+                WHERE admin_user_id = 617
+            ) 
+            AND name = 'Tobique'
+        )
+) AdminTenantUsers 
+    ON ua.user_id = AdminTenantUsers.user_id
+ON CONFLICT (id)
+DO UPDATE SET 
+    user_id = EXCLUDED.user_id,
+    fields = EXCLUDED.fields,
+    is_checked = EXCLUDED.is_checked,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at,
+    tenant_id = EXCLUDED.tenant_id;
+
+--  28. Table: user_bonus
+--        Query:
+-- Create the table if it doesn't exist and insert data based on the conditions
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'user_bonus'
+    ) THEN
+        CREATE TABLE public.user_bonus (
+            user_bonus_id integer PRIMARY KEY,
+            bonus_id integer NOT NULL,
+            user_id integer NOT NULL,
+            bonus_type character varying(255) NOT NULL,
+            free_spins_qty integer,
+            bonus_amount double precision DEFAULT '0'::double precision,
+            amount_to_wager double precision,
+            wagered_amount double precision,
+            wagering_status character varying(255),
+            transaction_id character varying(255),
+            status character varying(255),
+            claimed_at timestamp with time zone,
+            expire_at timestamp with time zone,
+            issuer_id integer,
+            issuer_role character varying(255),
+            games jsonb,
+            cash_amount double precision,
+            amount_converted double precision,
+            primary_currency_amount double precision DEFAULT '0'::double precision,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL,
+            unique_id uuid,
+            bet_level integer,
+            cancelled_by character varying(255),
+            other jsonb
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.user_bonus (
+    user_bonus_id, bonus_id, user_id, bonus_type, free_spins_qty, bonus_amount, amount_to_wager, 
+    wagered_amount, wagering_status, transaction_id, status, claimed_at, expire_at, issuer_id, 
+    issuer_role, games, cash_amount, amount_converted, primary_currency_amount, created_at, 
+    updated_at, unique_id, bet_level, cancelled_by, other
+)
+SELECT 
+    ub.user_bonus_id, ub.bonus_id, ub.user_id, ub.bonus_type, ub.free_spins_qty, ub.bonus_amount, 
+    ub.amount_to_wager, ub.wagered_amount, ub.wagering_status, ub.transaction_id, ub.status, 
+    ub.claimed_at, ub.expire_at, ub.issuer_id, ub.issuer_role, ub.games, ub.cash_amount, 
+    ub.amount_converted, ub.primary_currency_amount, ub.created_at, ub.updated_at, 
+    ub.unique_id, ub.bet_level, ub.cancelled_by, ub.other
+FROM 
+    multi_tenant_system.user_bonus ub
+INNER JOIN (
+    SELECT user_id
+    FROM multi_tenant_system.users
+    WHERE 
+        tenant_id IN (
+            SELECT tenant_id 
+            FROM multi_tenant_system.tenants 
+            WHERE admin_user_id = 617
+        )
+        AND license_id IN (
+            SELECT id 
+            FROM multi_tenant_system.tenant_multi_licenses 
+            WHERE tenant_id IN (
+                SELECT tenant_id 
+                FROM multi_tenant_system.tenants 
+                WHERE admin_user_id = 617
+            ) 
+            AND name = 'Tobique'
+        )
+) AdminTenantUsers 
+    ON ub.user_id = AdminTenantUsers.user_id
+ON CONFLICT (user_bonus_id)
+DO UPDATE SET 
+    bonus_id = EXCLUDED.bonus_id,
+    user_id = EXCLUDED.user_id,
+    bonus_type = EXCLUDED.bonus_type,
+    free_spins_qty = EXCLUDED.free_spins_qty,
+    bonus_amount = EXCLUDED.bonus_amount,
+    amount_to_wager = EXCLUDED.amount_to_wager,
+    wagered_amount = EXCLUDED.wagered_amount,
+    wagering_status = EXCLUDED.wagering_status,
+    transaction_id = EXCLUDED.transaction_id,
+    status = EXCLUDED.status,
+    claimed_at = EXCLUDED.claimed_at,
+    expire_at = EXCLUDED.expire_at,
+    issuer_id = EXCLUDED.issuer_id,
+    issuer_role = EXCLUDED.issuer_role,
+    games = EXCLUDED.games,
+    cash_amount = EXCLUDED.cash_amount,
+    amount_converted = EXCLUDED.amount_converted,
+    primary_currency_amount = EXCLUDED.primary_currency_amount,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at,
+    unique_id = EXCLUDED.unique_id,
+    bet_level = EXCLUDED.bet_level,
+    cancelled_by = EXCLUDED.cancelled_by,
+    other = EXCLUDED.other;
+
+
+
+
+
+--    29. Table: user_documents
+ --       Query:
+-- Create the table if it doesn't exist and insert data based on the conditions
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'user_documents'
+    ) THEN
+        CREATE TABLE public.user_documents (
+            user_document_id integer NOT NULL,
+            user_id integer,
+            document_url jsonb,
+            document_name character varying(255),
+            status smallint DEFAULT 0 NOT NULL,
+            actionee character varying(255),
+            action_performed_at timestamp with time zone,
+            reason text,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL,
+            actionee_type character varying(255),
+            PRIMARY KEY (user_document_id)
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.user_documents (
+    user_document_id, user_id, document_url, document_name, status, 
+    actionee, action_performed_at, reason, created_at, updated_at, actionee_type
+)
+SELECT 
+    ud.user_document_id, ud.user_id, ud.document_url, ud.document_name, ud.status, 
+    ud.actionee, ud.action_performed_at, ud.reason, ud.created_at, ud.updated_at, ud.actionee_type
+FROM 
+    multi_tenant_system.user_documents ud
+INNER JOIN (
+    SELECT user_id
+    FROM multi_tenant_system.users
+    WHERE 
+        tenant_id IN (
+            SELECT tenant_id 
+            FROM multi_tenant_system.tenants 
+            WHERE admin_user_id = 617
+        )
+        AND license_id IN (
+            SELECT id 
+            FROM multi_tenant_system.tenant_multi_licenses 
+            WHERE tenant_id IN (
+                SELECT tenant_id 
+                FROM multi_tenant_system.tenants 
+                WHERE admin_user_id = 617
+            ) 
+            AND name = 'Tobique'
+        )
+) AdminTenantUsers 
+    ON ud.user_id = AdminTenantUsers.user_id
+ON CONFLICT (user_document_id)
+DO UPDATE SET 
+    user_id = EXCLUDED.user_id,
+    document_url = EXCLUDED.document_url,
+    document_name = EXCLUDED.document_name,
+    status = EXCLUDED.status,
+    actionee = EXCLUDED.actionee,
+    action_performed_at = EXCLUDED.action_performed_at,
+    reason = EXCLUDED.reason,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at,
+    actionee_type = EXCLUDED.actionee_type;
+
+
+
+--    30. Table: user_login_session
+--        Query:
+-- Create the table if it doesn't exist and insert data based on the conditions
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'user_login_session'
+    ) THEN
+        CREATE TABLE public.user_login_session (
+            id integer NOT NULL,
+            user_id integer NOT NULL,
+            start_time timestamp with time zone,
+            end_time timestamp with time zone,
+            session_end_reason character varying(255),
+            start_cash_balance double precision,
+            end_cash_balance double precision,
+            start_non_cash_balance double precision,
+            end_non_cash_balance double precision,
+            game_round integer,
+            game_sessions integer,
+            total_bet_amount double precision,
+            total_win_amount double precision,
+            max_bet_cash_amount double precision,
+            max_bet_non_cash_amount double precision,
+            browser_type character varying(255),
+            os_type character varying(255),
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL,
+            device_type character varying,
+            ip inet,
+            PRIMARY KEY (id)
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.user_login_session (
+    id, user_id, start_time, end_time, session_end_reason, 
+    start_cash_balance, end_cash_balance, start_non_cash_balance, 
+    end_non_cash_balance, game_round, game_sessions, total_bet_amount, 
+    total_win_amount, max_bet_cash_amount, max_bet_non_cash_amount, 
+    browser_type, os_type, created_at, updated_at, device_type, ip
+)
+SELECT 
+    uls.id, uls.user_id, uls.start_time, uls.end_time, uls.session_end_reason, 
+    uls.start_cash_balance, uls.end_cash_balance, uls.start_non_cash_balance, 
+    uls.end_non_cash_balance, uls.game_round, uls.game_sessions, 
+    uls.total_bet_amount, uls.total_win_amount, uls.max_bet_cash_amount, 
+    uls.max_bet_non_cash_amount, uls.browser_type, uls.os_type, uls.created_at, 
+    uls.updated_at, uls.device_type, uls.ip
+FROM 
+    multi_tenant_system.user_login_session uls
+INNER JOIN (
+    SELECT user_id
+    FROM multi_tenant_system.users
+    WHERE 
+        tenant_id IN (
+            SELECT tenant_id 
+            FROM multi_tenant_system.tenants 
+            WHERE admin_user_id = 617
+        )
+        AND license_id IN (
+            SELECT id 
+            FROM multi_tenant_system.tenant_multi_licenses 
+            WHERE tenant_id IN (
+                SELECT tenant_id 
+                FROM multi_tenant_system.tenants 
+                WHERE admin_user_id = 617
+            ) 
+            AND name = 'Tobique'
+        )
+) AdminTenantUsers 
+    ON uls.user_id = AdminTenantUsers.user_id
+ON CONFLICT (id)
+DO UPDATE SET 
+    user_id = EXCLUDED.user_id,
+    start_time = EXCLUDED.start_time,
+    end_time = EXCLUDED.end_time,
+    session_end_reason = EXCLUDED.session_end_reason,
+    start_cash_balance = EXCLUDED.start_cash_balance,
+    end_cash_balance = EXCLUDED.end_cash_balance,
+    start_non_cash_balance = EXCLUDED.start_non_cash_balance,
+    end_non_cash_balance = EXCLUDED.end_non_cash_balance,
+    game_round = EXCLUDED.game_round,
+    game_sessions = EXCLUDED.game_sessions,
+    total_bet_amount = EXCLUDED.total_bet_amount,
+    total_win_amount = EXCLUDED.total_win_amount,
+    max_bet_cash_amount = EXCLUDED.max_bet_cash_amount,
+    max_bet_non_cash_amount = EXCLUDED.max_bet_non_cash_amount,
+    browser_type = EXCLUDED.browser_type,
+    os_type = EXCLUDED.os_type,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at,
+    device_type = EXCLUDED.device_type,
+    ip = EXCLUDED.ip;
+	
+ --   31. Table: withdraw_requests
+--    Query:
+-- Create the table if it doesn't exist and insert data based on the conditions
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'withdraw_requests'
+    ) THEN
+        CREATE TABLE public.withdraw_requests (
+            withdraw_request_id integer NOT NULL,
+            user_id integer,
+            status integer,
+            name character varying(255),
+            email character varying(255) NOT NULL,
+            amount double precision,
+            transaction_id character varying(255),
+            actionable_type character varying(255),
+            actionable_id integer,
+            actioned_at timestamp with time zone,
+            tenant_id integer NOT NULL,
+            payment_provider character varying(255) NOT NULL,
+            payment_aggregator character varying(255) NOT NULL,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL,
+            more_details jsonb,
+            PRIMARY KEY (withdraw_request_id)
+        );
+    END IF;
+END $$;
+
+-- Insert or update data
+INSERT INTO public.withdraw_requests (
+    withdraw_request_id, user_id, status, name, email, amount, 
+    transaction_id, actionable_type, actionable_id, actioned_at, 
+    tenant_id, payment_provider, payment_aggregator, created_at, 
+    updated_at, more_details
+)
+SELECT 
+    wr.withdraw_request_id, wr.user_id, wr.status, wr.name, wr.email, wr.amount, 
+    wr.transaction_id, wr.actionable_type, wr.actionable_id, wr.actioned_at, 
+    wr.tenant_id, wr.payment_provider, wr.payment_aggregator, wr.created_at, 
+    wr.updated_at, wr.more_details
+FROM 
+    multi_tenant_system.withdraw_requests wr
+INNER JOIN (
+    SELECT user_id
+    FROM multi_tenant_system.users
+    WHERE 
+        tenant_id IN (
+            SELECT tenant_id 
+            FROM multi_tenant_system.tenants 
+            WHERE admin_user_id = 617
+        )
+        AND license_id IN (
+            SELECT id 
+            FROM multi_tenant_system.tenant_multi_licenses 
+            WHERE tenant_id IN (
+                SELECT tenant_id 
+                FROM multi_tenant_system.tenants 
+                WHERE admin_user_id = 617
+            ) 
+            AND name = 'Tobique'
+        )
+) AdminTenantUsers 
+    ON wr.user_id = AdminTenantUsers.user_id
+ON CONFLICT (withdraw_request_id)
+DO UPDATE SET 
+    user_id = EXCLUDED.user_id,
+    status = EXCLUDED.status,
+    name = EXCLUDED.name,
+    email = EXCLUDED.email,
+    amount = EXCLUDED.amount,
+    transaction_id = EXCLUDED.transaction_id,
+    actionable_type = EXCLUDED.actionable_type,
+    actionable_id = EXCLUDED.actionable_id,
+    actioned_at = EXCLUDED.actioned_at,
+    tenant_id = EXCLUDED.tenant_id,
+    payment_provider = EXCLUDED.payment_provider,
+    payment_aggregator = EXCLUDED.payment_aggregator,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at,
+    more_details = EXCLUDED.more_details;
+
+
+

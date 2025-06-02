@@ -1,0 +1,302 @@
+DO $$
+BEGIN
+    -- Ensure tenants table exists
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'tenants'
+    ) THEN
+        CREATE TABLE public.tenants (
+            tenant_id integer PRIMARY KEY,
+            admin_user_id integer NOT NULL
+            -- Add other relevant columns here, if necessary
+        );
+    END IF;
+
+    -- Create table banned_games_list if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'banned_games_list'
+    ) THEN
+        CREATE TABLE public.banned_games_list (
+            banned_games_list_id integer NOT NULL,
+            name character varying(255) NOT NULL,
+            parent_type character varying(255) NOT NULL,
+            parent_id integer NOT NULL,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL,
+            games text,
+            affiliate_ids jsonb,
+            max_bet_allowed integer,
+            tenant_id integer,
+            is_active boolean DEFAULT true NOT NULL,
+            PRIMARY KEY (banned_games_list_id)
+        );
+    END IF;
+
+    INSERT INTO public.banned_games_list (
+        banned_games_list_id, name, parent_type, parent_id, created_at, updated_at, 
+        games, affiliate_ids, max_bet_allowed, tenant_id, is_active
+    )
+    SELECT 
+        bgl.banned_games_list_id, bgl.name, bgl.parent_type, bgl.parent_id, 
+        bgl.created_at, bgl.updated_at, bgl.games, bgl.affiliate_ids, 
+        bgl.max_bet_allowed, bgl.tenant_id, bgl.is_active
+    FROM 
+        public.banned_games_list bgl
+    INNER JOIN (
+        SELECT tenant_id
+        FROM public.tenants
+        WHERE admin_user_id = 617
+    ) AdminTenants
+        ON bgl.tenant_id = AdminTenants.tenant_id
+    WHERE 
+        bgl.parent_type = 'admin' 
+        AND bgl.parent_id = 617
+    ON CONFLICT (banned_games_list_id)
+    DO UPDATE SET 
+        name = EXCLUDED.name,
+        parent_type = EXCLUDED.parent_type,
+        parent_id = EXCLUDED.parent_id,
+        created_at = EXCLUDED.created_at,
+        updated_at = EXCLUDED.updated_at,
+        games = EXCLUDED.games,
+        affiliate_ids = EXCLUDED.affiliate_ids,
+        max_bet_allowed = EXCLUDED.max_bet_allowed,
+        tenant_id = EXCLUDED.tenant_id,
+        is_active = EXCLUDED.is_active;
+
+    -- Create table licenses if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'licenses'
+    ) THEN
+        CREATE TABLE public.licenses (
+            id integer NOT NULL,
+            name character varying(255) NOT NULL,
+            deposit_limit_exclusion boolean DEFAULT false NOT NULL,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL,
+            PRIMARY KEY (id)
+        );
+    END IF;
+
+    INSERT INTO public.licenses (
+        id, name, deposit_limit_exclusion, created_at, updated_at
+    )
+    SELECT 
+        l.id, l.name, l.deposit_limit_exclusion, l.created_at, l.updated_at
+    FROM 
+        public.licenses l
+    WHERE 
+        l.name = 'Tobique'
+    ON CONFLICT (id)
+    DO UPDATE SET 
+        name = EXCLUDED.name,
+        deposit_limit_exclusion = EXCLUDED.deposit_limit_exclusion,
+        created_at = EXCLUDED.created_at,
+        updated_at = EXCLUDED.updated_at;
+
+    -- Create table multi_language_support if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'multi_language_support'
+    ) THEN
+        CREATE TABLE public.multi_language_support (
+            multi_language_support_id integer NOT NULL,
+            tenant_id integer,
+            language character varying(255) NOT NULL,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL,
+            data jsonb,
+            license_id integer,
+            PRIMARY KEY (multi_language_support_id)
+        );
+    END IF;
+
+    INSERT INTO public.multi_language_support (
+        multi_language_support_id, tenant_id, language, created_at, updated_at, 
+        data, license_id
+    )
+    SELECT 
+        mls.multi_language_support_id, mls.tenant_id, mls.language, 
+        mls.created_at, mls.updated_at, mls.data, mls.license_id
+    FROM 
+        public.multi_language_support mls
+    INNER JOIN (
+        SELECT tenant_id 
+        FROM public.tenants 
+        WHERE admin_user_id = 617
+    ) AdminTenants
+        ON mls.tenant_id = AdminTenants.tenant_id
+    ON CONFLICT (multi_language_support_id)
+    DO UPDATE SET 
+        tenant_id = EXCLUDED.tenant_id,
+        language = EXCLUDED.language,
+        created_at = EXCLUDED.created_at,
+        updated_at = EXCLUDED.updated_at,
+        data = EXCLUDED.data,
+        license_id = EXCLUDED.license_id;
+
+    -- Create table parent_groups if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'parent_groups'
+    ) THEN
+        CREATE TABLE public.parent_groups (
+            id integer NOT NULL,
+            parent_group_name character varying(255) NOT NULL,
+            admin_id integer,
+            role integer DEFAULT 1 NOT NULL,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL,
+            PRIMARY KEY (id)
+        );
+    END IF;
+
+    INSERT INTO public.parent_groups (
+        id, parent_group_name, admin_id, role, created_at, updated_at
+    )
+    SELECT 
+        pg.id, pg.parent_group_name, pg.admin_id, pg.role, pg.created_at, pg.updated_at
+    FROM 
+        public.parent_groups pg
+    WHERE 
+        pg.admin_id = 617 
+        AND pg.role = 2
+    ON CONFLICT (id)
+    DO UPDATE SET 
+        parent_group_name = EXCLUDED.parent_group_name,
+        admin_id = EXCLUDED.admin_id,
+        role = EXCLUDED.role,
+        created_at = EXCLUDED.created_at,
+        updated_at = EXCLUDED.updated_at;
+
+    -- Create table payment_providers if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'payment_providers'
+    ) THEN
+        CREATE TABLE public.payment_providers (
+            payment_provider_id integer NOT NULL,
+            display_name character varying(255),
+            name character varying(255),
+            "group" character varying(255),
+            settings jsonb,
+            supports_deposit boolean,
+            supports_withdrawal boolean,
+            regions jsonb,
+            aggregator character varying(255),
+            deposit_is_active boolean,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL,
+            category character varying,
+            amount_keys jsonb DEFAULT '{"button1":20,"button2":50,"button3":100,"button4":500,"button5":1000,"button6":"Other"}'::jsonb,
+            kyc_countries jsonb,
+            reporting_name character varying(255),
+            tenant_id integer DEFAULT 2,
+            withdraw_order_id integer,
+            deposit_order_id integer,
+            withdraw_is_active boolean DEFAULT false NOT NULL,
+            currencies jsonb,
+            affiliate_ids jsonb,
+            aggregator_status boolean DEFAULT true NOT NULL,
+            provider_order jsonb,
+            PRIMARY KEY (payment_provider_id)
+        );
+    END IF;
+
+    INSERT INTO public.payment_providers (
+        payment_provider_id, display_name, name, "group", settings, supports_deposit,
+        supports_withdrawal, regions, aggregator, deposit_is_active, created_at, updated_at,
+        category, amount_keys, kyc_countries, reporting_name, tenant_id, withdraw_order_id,
+        deposit_order_id, withdraw_is_active, currencies, affiliate_ids, aggregator_status,
+        provider_order
+    )
+    SELECT 
+        pp.payment_provider_id, pp.display_name, pp.name, pp."group", pp.settings, pp.supports_deposit,
+        pp.supports_withdrawal, pp.regions, pp.aggregator, pp.deposit_is_active, pp.created_at, pp.updated_at,
+        pp.category, pp.amount_keys, pp.kyc_countries, pp.reporting_name, pp.tenant_id, pp.withdraw_order_id,
+        pp.deposit_order_id, pp.withdraw_is_active, pp.currencies, pp.affiliate_ids, pp.aggregator_status,
+        pp.provider_order
+    FROM 
+        public.payment_providers pp
+    INNER JOIN (
+        SELECT tenant_id 
+        FROM public.tenants 
+        WHERE admin_user_id = 617
+    ) AdminTenants
+        ON pp.tenant_id = AdminTenants.tenant_id
+    ON CONFLICT (payment_provider_id)
+    DO UPDATE SET 
+        display_name = EXCLUDED.display_name,
+        name = EXCLUDED.name,
+        "group" = EXCLUDED."group",
+        settings = EXCLUDED.settings,
+        supports_deposit = EXCLUDED.supports_deposit,
+        supports_withdrawal = EXCLUDED.supports_withdrawal,
+        regions = EXCLUDED.regions,
+        aggregator = EXCLUDED.aggregator,
+        deposit_is_active = EXCLUDED.deposit_is_active,
+        created_at = EXCLUDED.created_at,
+        updated_at = EXCLUDED.updated_at,
+        category = EXCLUDED.category,
+        amount_keys = EXCLUDED.amount_keys,
+        kyc_countries = EXCLUDED.kyc_countries,
+        reporting_name = EXCLUDED.reporting_name,
+        tenant_id = EXCLUDED.tenant_id,
+        withdraw_order_id = EXCLUDED.withdraw_order_id,
+        deposit_order_id = EXCLUDED.deposit_order_id,
+        withdraw_is_active = EXCLUDED.withdraw_is_active,
+        currencies = EXCLUDED.currencies,
+        affiliate_ids = EXCLUDED.affiliate_ids,
+        aggregator_status = EXCLUDED.aggregator_status,
+        provider_order = EXCLUDED.provider_order;
+
+    -- Create table whitelisted_domains if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'whitelisted_domains'
+    ) THEN
+        CREATE TABLE public.whitelisted_domains (
+            id integer NOT NULL,
+            domains json DEFAULT '[]'::json NOT NULL,
+            admin_id integer,
+            role integer,
+            created_at timestamp with time zone NOT NULL,
+            updated_at timestamp with time zone NOT NULL,
+            PRIMARY KEY (id)
+        );
+    END IF;
+
+    INSERT INTO public.whitelisted_domains (
+        id, domains, admin_id, role, created_at, updated_at
+    )
+    SELECT 
+        wd.id, wd.domains, wd.admin_id, wd.role, wd.created_at, wd.updated_at
+    FROM 
+        public.whitelisted_domains wd
+    WHERE 
+        wd.admin_id = 617 
+        AND wd.role = 2
+    ON CONFLICT (id)
+    DO UPDATE SET 
+        domains = EXCLUDED.domains,
+        admin_id = EXCLUDED.admin_id,
+        role = EXCLUDED.role,
+        created_at = EXCLUDED.created_at,
+        updated_at = EXCLUDED.updated_at;
+END $$;
